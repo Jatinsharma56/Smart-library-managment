@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Library Insights Hub
 
 AI-powered dashboard showing real-time library seat availability, per-zone crowd levels, and short-term crowding forecasts in a clean, responsive UI.
@@ -92,3 +93,6 @@ You can later replace this with a proper ML model informed by historical data.
 - **Weekly patterns**: Add charts showing hourly average occupancy by weekday.
 - **Notifications**: Allow subscribing for alerts when the library becomes quiet enough or drops below a threshold.
 
+=======
+# Smart-library-managment
+>>>>>>> ee51345550fc210f2d4ae6dbbc2d37fe93bc64e1
