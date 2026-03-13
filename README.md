@@ -46,24 +46,6 @@ https://smart-library-managment.vercel.app
 
 ---
 
-## 📂 Project Structure
-
-```text
-smart-library-managment
-│
-├── public
-│   ├── css
-│   ├── js
-│
-├── views
-│
-├── server.js
-├── package.json
-└── README.md
-```
-
----
-
 ## ⚙️ Installation & Setup
 
 ### 1️⃣ Clone the Repository
