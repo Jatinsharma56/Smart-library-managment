@@ -19,6 +19,12 @@ const sortSelectEl = document.getElementById('sortSelect');
 const filterSelectEl = document.getElementById('filterSelect');
 const autoRefreshToggleEl = document.getElementById('autoRefreshToggle');
 
+const smartRecommendationEl = document.getElementById('smartRecommendation');
+const smartRecommendationTextEl = document.getElementById('smartRecommendationText');
+const weeklyAnalyticsChartEl = document.getElementById('weeklyAnalyticsChart');
+
+let chartInstance = null;
+
 // Auth and user actions
 const authOpenButtonEl = document.getElementById('authOpenButton');
 const authDialogBackdropEl = document.getElementById('authDialogBackdrop');
@@ -35,9 +41,17 @@ const authFeedbackEl = document.getElementById('authFeedback');
 const authUserInfoEl = document.getElementById('authUserInfo');
 const authUserNameEl = document.getElementById('authUserName');
 
+const sidebarCheckInStatus = document.getElementById('sidebarCheckInStatus');
+
 const seatZoneSelectEl = document.getElementById('seatZoneSelect');
+const seatTimeSlotSelectEl = document.getElementById('seatTimeSlotSelect');
 const seatMapGridEl = document.getElementById('seatMapGrid');
 const seatBookMessageEl = document.getElementById('seatBookMessage');
+const checkInPanelEl = document.getElementById('checkInPanel');
+const checkInTimerTextEl = document.getElementById('checkInTimerText');
+const checkInStatusTextEl = document.getElementById('checkInStatusText');
+const checkInButtonEl = document.getElementById('checkInButton');
+const checkOutButtonEl = document.getElementById('checkOutButton');
 
 const bookSearchInputEl = document.getElementById('bookSearchInput');
 const bookSearchButtonEl = document.getElementById('bookSearchButton');
@@ -48,6 +62,7 @@ const forecastListEl = document.getElementById('forecastList');
 let authMode = 'login';
 let seatMapData = null;
 let selectedZoneId = seatZoneSelectEl ? seatZoneSelectEl.value : 'silent';
+let selectedTimeSlot = 'now-2hrs';
 let appBootstrapped = false;
 
 async function fetchStatus() {
@@ -132,7 +147,29 @@ function renderSnapshot(snapshot) {
   lastUpdatedEl.textContent = `Last updated: ${formatTime(generatedAt)}`;
 
   renderZones(zones);
+  renderSmartRecommendation(zones);
   renderForecast(aiInsight);
+}
+
+function renderSmartRecommendation(zones) {
+  if (!zones || zones.length === 0) {
+    smartRecommendationEl.classList.add('hidden');
+    return;
+  }
+  
+  // Find zone with the lowest occupancy ratio and > 0 available seats
+  const availableZones = zones.filter(z => z.available > 0);
+  if (availableZones.length === 0) {
+    smartRecommendationEl.classList.add('hidden');
+    return;
+  }
+  
+  const bestZone = availableZones.reduce((prev, curr) => 
+    prev.occupancyRatio < curr.occupancyRatio ? prev : curr
+  );
+  
+  smartRecommendationTextEl.innerHTML = `<strong>${bestZone.name}</strong> is currently the quietest with ${bestZone.available} seats available.`;
+  smartRecommendationEl.classList.remove('hidden');
 }
 
 function applyZoneFilterAndSort(zones) {
@@ -317,7 +354,7 @@ function setAuthState(user, session) {
     authUserNameEl.textContent = currentUser.name || currentUser.email;
     authOpenButtonEl.textContent = 'Logout';
     if (seatZoneSelectEl) {
-      loadSeatMap(selectedZoneId || seatZoneSelectEl.value);
+      loadSeatMap(selectedZoneId || seatZoneSelectEl.value, selectedTimeSlot);
     }
     bootstrapAfterAuth();
   } else {
@@ -435,8 +472,27 @@ authFormEl.addEventListener('submit', async (e) => {
 
 // ----- Seat booking with seat map -----
 
-async function loadSeatMap(zoneId) {
+function populateTimeSlots() {
+  if (!seatTimeSlotSelectEl) return;
+  seatTimeSlotSelectEl.innerHTML = '';
+  
+  const options = [
+    { value: '09:30-13:00', label: 'Morning Session (09:30 AM - 01:00 PM)' },
+    { value: '13:45-20:00', label: 'Afternoon Session (01:45 PM - 08:00 PM)' }
+  ];
+
+  options.forEach((opt, index) => {
+    const el = document.createElement('option');
+    el.value = opt.value;
+    el.textContent = opt.label;
+    if (index === 0) selectedTimeSlot = opt.value;
+    seatTimeSlotSelectEl.appendChild(el);
+  });
+}
+
+async function loadSeatMap(zoneId, slot) {
   selectedZoneId = zoneId;
+  selectedTimeSlot = slot || (seatTimeSlotSelectEl ? seatTimeSlotSelectEl.value : null);
   seatBookMessageEl.textContent = '';
   seatBookMessageEl.classList.remove(
     'sidebar-feedback--error',
@@ -446,15 +502,22 @@ async function loadSeatMap(zoneId) {
   if (!currentUser || !sessionId) {
     seatMapGridEl.innerHTML =
       '<div class="sidebar-feedback sidebar-feedback--error">Login to view and book seats.</div>';
+    checkInPanelEl.classList.add('hidden');
     return;
   }
 
   try {
-    const res = await fetch(`/api/seats/map?zoneId=${encodeURIComponent(zoneId)}`, {
+    let url = `/api/seats/map?zoneId=${encodeURIComponent(zoneId)}`;
+    if (selectedTimeSlot) {
+      url += `&slot=${encodeURIComponent(selectedTimeSlot)}`;
+    }
+    
+    const res = await fetch(url, {
       headers: {
         'x-session-id': sessionId
       }
     });
+
     const data = await res.json();
     if (!res.ok) {
       seatMapGridEl.innerHTML =
@@ -466,6 +529,23 @@ async function loadSeatMap(zoneId) {
   } catch {
     seatMapGridEl.innerHTML =
       '<div class="sidebar-feedback sidebar-feedback--error">Unable to load seats.</div>';
+  }
+}
+
+function updateSidebarStatus() {
+  if (!sidebarCheckInStatus || !seatMapData || !seatMapData.seats) return;
+  const mySeats = seatMapData.seats.filter(s => s.isMine);
+  
+  if (mySeats.length === 0) {
+    sidebarCheckInStatus.innerHTML = '<span style="color:var(--text-soft); font-size: 0.8rem;">You have no booked seats.</span>';
+    return;
+  }
+  
+  const uncheckedSeats = mySeats.filter(s => !s.isCheckedIn);
+  if (uncheckedSeats.length > 0) {
+    sidebarCheckInStatus.innerHTML = `<span style="color: var(--accent-strong); font-size: 0.8rem; font-weight: 600;">⚠️ You have ${uncheckedSeats.length} un-checked in seats!</span>`;
+  } else {
+    sidebarCheckInStatus.innerHTML = `<span style="color: #10b981; font-size: 0.8rem;">✅ Checked in to ${mySeats.length} seats.</span>`;
   }
 }
 
@@ -493,6 +573,17 @@ function renderSeatMap() {
     }
 
     cell.textContent = String(seat.seatNumber);
+    let titleMsg = `Seat ${seat.seatNumber}`;
+    if (seat.hasPower) titleMsg += ' (Electric Port)';
+    
+    if (seat.isMine) {
+      titleMsg += ' - Booked by you';
+    } else if (seat.status === 'booked') {
+      titleMsg += ' - Booked';
+    } else {
+      titleMsg += ' - Free';
+    }
+    cell.title = titleMsg;
 
     if (!seat.isMine && seat.status === 'booked') {
       cell.disabled = true;
@@ -502,6 +593,215 @@ function renderSeatMap() {
 
     seatMapGridEl.appendChild(cell);
   });
+
+  updateCheckInUI();
+  updateSidebarStatus();
+}
+
+let checkInCountdownTimer = null;
+
+function updateCheckInUI() {
+  if (checkInCountdownTimer) {
+    clearInterval(checkInCountdownTimer);
+    checkInCountdownTimer = null;
+  }
+
+  if (!seatMapData || !seatMapData.seats) {
+    checkInPanelEl.classList.add('hidden');
+    if (checkOutButtonEl) {
+      checkOutButtonEl.classList.add('hidden');
+    }
+    return;
+  }
+
+  const mySeats = seatMapData.seats.filter(s => s.isMine);
+  
+  if (mySeats.length === 0) {
+    checkInPanelEl.classList.add('hidden');
+    if (checkOutButtonEl) {
+      checkOutButtonEl.classList.add('hidden');
+    }
+    return;
+  }
+
+  checkInPanelEl.classList.remove('hidden');
+
+  const uncheckedSeats = mySeats.filter(s => !s.isCheckedIn);
+
+  if (uncheckedSeats.length === 0) {
+    checkInPanelEl.classList.add('checked-in');
+    checkInTimerTextEl.textContent = 'Checked In';
+    checkInStatusTextEl.textContent = `Seats: ${mySeats.map(s => s.seatNumber).join(', ')}`;
+    checkInButtonEl.style.display = 'none';
+    if (checkOutButtonEl) {
+      checkOutButtonEl.classList.remove('hidden');
+      checkOutButtonEl.style.display = 'block';
+    }
+  } else {
+    checkInPanelEl.classList.remove('checked-in');
+    checkInButtonEl.style.display = 'block';
+    if (checkOutButtonEl) {
+      checkOutButtonEl.style.display = 'none';
+    }
+    checkInStatusTextEl.textContent = 'to check in';
+    
+    // Start countdown timer locally using the oldest bookedAt timestamp
+    const oldestSeat = uncheckedSeats.reduce((a, b) => (a.bookedAt < b.bookedAt ? a : b));
+
+    if (oldestSeat.bookedAt) {
+      const EXPIRY_MS = 20 * 60 * 1000;
+      
+      const tick = () => {
+        const now = Date.now();
+        const elapsed = now - oldestSeat.bookedAt;
+        const remaining = EXPIRY_MS - elapsed;
+        
+        if (remaining <= 0) {
+          checkInTimerTextEl.textContent = '00:00';
+          checkInStatusTextEl.textContent = 'Expired. Refreshing...';
+          clearInterval(checkInCountdownTimer);
+          setTimeout(() => {
+            loadSeatMap(selectedZoneId || seatZoneSelectEl.value, selectedTimeSlot);
+            updateSidebarStatus();
+          }, 2000);
+          return;
+        }
+        
+        const mins = Math.floor(remaining / 60000);
+        const secs = Math.floor((remaining % 60000) / 1000);
+        checkInTimerTextEl.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      };
+      
+      tick();
+      checkInCountdownTimer = setInterval(tick, 1000);
+    } else {
+      checkInTimerTextEl.textContent = '20:00';
+    }
+  }
+}
+
+async function handleCheckInClick() {
+  if (!currentUser || !sessionId) return;
+  
+  const mySeats = seatMapData?.seats.filter(s => s.isMine && !s.isCheckedIn);
+  if (!mySeats || mySeats.length === 0) return;
+
+  checkInButtonEl.disabled = true;
+  checkInButtonEl.textContent = 'Verifying...';
+
+  try {
+    let hasError = false;
+    let lastErrorMsg = '';
+    
+    // Check in all owned seats that aren't checked in yet
+    for (const seat of mySeats) {
+      const res = await fetch('/api/seats/checkIn', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session-id': sessionId
+        },
+        body: JSON.stringify({ 
+          zoneId: selectedZoneId || seatZoneSelectEl.value, 
+          seatNumber: seat.seatNumber,
+          slot: selectedTimeSlot
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      
+      if (!res.ok) {
+        hasError = true;
+        lastErrorMsg = data.message || 'Check-in failed.';
+      } else if (data.seatMap) {
+        seatMapData = data.seatMap; // update with latest
+      }
+    }
+    
+    if (hasError) {
+      seatBookMessageEl.textContent = lastErrorMsg;
+      seatBookMessageEl.classList.add('sidebar-feedback--error');
+    } else {
+      seatBookMessageEl.textContent = 'Checked in successfully.';
+      seatBookMessageEl.classList.add('sidebar-feedback--success');
+    }
+    
+    renderSeatMap();
+  } catch (err) {
+    seatBookMessageEl.textContent = 'Unable to reach server.';
+    seatBookMessageEl.classList.add('sidebar-feedback--error');
+  } finally {
+    checkInButtonEl.disabled = false;
+    checkInButtonEl.textContent = 'Check In Now';
+  }
+}
+
+async function handleCheckOutClick() {
+  if (!currentUser || !sessionId) return;
+  
+  const mySeats = seatMapData?.seats.filter(s => s.isMine);
+  if (!mySeats || mySeats.length === 0) return;
+
+  if (checkOutButtonEl) {
+    checkOutButtonEl.disabled = true;
+    checkOutButtonEl.textContent = 'Releasing...';
+  }
+
+  try {
+    let hasError = false;
+    let lastErrorMsg = '';
+    
+    // Release all owned seats
+    for (const seat of mySeats) {
+      const res = await fetch('/api/seats/releaseSeat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session-id': sessionId
+        },
+        body: JSON.stringify({ 
+          zoneId: selectedZoneId || seatZoneSelectEl.value, 
+          seatNumber: seat.seatNumber,
+          slot: selectedTimeSlot
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      
+      if (!res.ok) {
+        hasError = true;
+        lastErrorMsg = data.message || 'Check-out failed.';
+      } else if (data.seatMap) {
+        seatMapData = data.seatMap; // update with latest
+      }
+    }
+    
+    if (hasError) {
+      seatBookMessageEl.textContent = lastErrorMsg;
+      seatBookMessageEl.classList.add('sidebar-feedback--error');
+    } else {
+      seatBookMessageEl.textContent = 'Checked out successfully. Seat is now available.';
+      seatBookMessageEl.classList.add('sidebar-feedback--success');
+    }
+    
+    renderSeatMap();
+  } catch (err) {
+    seatBookMessageEl.textContent = 'Unable to reach server.';
+    seatBookMessageEl.classList.add('sidebar-feedback--error');
+  } finally {
+    if (checkOutButtonEl) {
+      checkOutButtonEl.disabled = false;
+      checkOutButtonEl.textContent = 'Check Out Early';
+    }
+  }
+}
+
+if (checkInButtonEl) {
+  checkInButtonEl.addEventListener('click', handleCheckInClick);
+}
+
+if (checkOutButtonEl) {
+  checkOutButtonEl.addEventListener('click', handleCheckOutClick);
 }
 
 async function handleSeatClick(seat) {
@@ -527,7 +827,11 @@ async function handleSeatClick(seat) {
         'Content-Type': 'application/json',
         'x-session-id': sessionId
       },
-      body: JSON.stringify({ zoneId, seatNumber: seat.seatNumber })
+      body: JSON.stringify({ 
+        zoneId, 
+        seatNumber: seat.seatNumber,
+        slot: selectedTimeSlot
+      })
     });
 
     const data = await res.json().catch(() => ({}));
@@ -545,7 +849,7 @@ async function handleSeatClick(seat) {
       seatMapData = data.seatMap;
       renderSeatMap();
     } else {
-      loadSeatMap(zoneId);
+      loadSeatMap(zoneId, selectedTimeSlot);
     }
 
     fetchStatus();
@@ -557,7 +861,14 @@ async function handleSeatClick(seat) {
 
 if (seatZoneSelectEl) {
   seatZoneSelectEl.addEventListener('change', () => {
-    loadSeatMap(seatZoneSelectEl.value);
+    loadSeatMap(seatZoneSelectEl.value, selectedTimeSlot);
+  });
+}
+
+if (seatTimeSlotSelectEl) {
+  seatTimeSlotSelectEl.addEventListener('change', () => {
+    selectedTimeSlot = seatTimeSlotSelectEl.value;
+    loadSeatMap(selectedZoneId || seatZoneSelectEl.value, selectedTimeSlot);
   });
 }
 
@@ -601,10 +912,20 @@ async function runBookSearch() {
 
       const reserveBtn = document.createElement('button');
       reserveBtn.className = 'btn-ghost-small';
-      reserveBtn.textContent = 'Reserve';
-      reserveBtn.disabled = !book.isReservable;
+      
+      const alreadyReservedByMe = currentUser && book.reservedByUserIds && book.reservedByUserIds.includes(currentUser.id);
 
-      reserveBtn.addEventListener('click', () => reserveBook(book.id, reserveBtn));
+      if (alreadyReservedByMe) {
+        reserveBtn.textContent = 'Reserved';
+        reserveBtn.disabled = true;
+        reserveBtn.classList.add('btn-ghost-small--success');
+      } else if (!book.isReservable) {
+        reserveBtn.textContent = 'Out of Stock';
+        reserveBtn.disabled = true;
+      } else {
+        reserveBtn.textContent = 'Reserve';
+        reserveBtn.addEventListener('click', () => reserveBook(book.id, reserveBtn, availability));
+      }
 
       meta.appendChild(availability);
       meta.appendChild(reserveBtn);
@@ -623,7 +944,7 @@ async function runBookSearch() {
   }
 }
 
-async function reserveBook(bookId, buttonEl) {
+async function reserveBook(bookId, buttonEl, availabilityEl) {
   if (!currentUser || !sessionId) {
     buttonEl.textContent = 'Login required';
     return;
@@ -648,7 +969,21 @@ async function reserveBook(bookId, buttonEl) {
       return;
     }
 
-    buttonEl.textContent = 'Reserved';
+    // Update the local availability DOM to reflect the new copies
+    if (data.book && availabilityEl) {
+      availabilityEl.innerHTML = `<strong>${data.book.availableCopies}</strong> of ${data.book.totalCopies} available`;
+      
+      if (data.book.availableCopies === 0) {
+        buttonEl.textContent = 'Out of Stock';
+        buttonEl.classList.remove('btn-ghost-small--success');
+      } else {
+        buttonEl.textContent = 'Reserved';
+        buttonEl.classList.add('btn-ghost-small--success');
+      }
+    } else {
+      buttonEl.textContent = 'Reserved';
+      buttonEl.classList.add('btn-ghost-small--success');
+    }
   } catch {
     buttonEl.textContent = 'Error';
   }
@@ -667,14 +1002,63 @@ bookSearchInputEl.addEventListener('keydown', (e) => {
 
 // ----- Bootstrap -----
 
+async function renderWeeklyAnalytics() {
+  if (!weeklyAnalyticsChartEl) return;
+  
+  try {
+    const res = await fetch('/api/analytics/weekly');
+    if (!res.ok) return;
+    const data = await res.json();
+    
+    if (chartInstance) {
+      chartInstance.destroy();
+    }
+    
+    chartInstance = new Chart(weeklyAnalyticsChartEl, {
+      type: 'line',
+      data: data,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'top',
+            labels: { color: '#94a3b8' }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+            ticks: { color: '#94a3b8' },
+            title: { display: true, text: 'Occupied Seats', color: '#94a3b8' }
+          },
+          x: {
+            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+            ticks: { color: '#94a3b8' }
+          }
+        },
+        elements: {
+          line: { tension: 0.4 }, // Smooth curves
+          point: { radius: 2 }
+        }
+      }
+    });
+  } catch (err) {
+    console.error('Failed to load weekly analytics', err);
+  }
+}
+
 function bootstrapAfterAuth() {
   if (appBootstrapped) return;
   appBootstrapped = true;
+  populateTimeSlots();
   fetchStatus();
   startAutoRefresh();
   runBookSearch();
+  renderWeeklyAnalytics();
   if (seatZoneSelectEl) {
-    loadSeatMap(seatZoneSelectEl.value);
+    loadSeatMap(seatZoneSelectEl.value, selectedTimeSlot);
   }
 }
 

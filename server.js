@@ -13,6 +13,17 @@ app.use(express.json());
 const publicDir = path.join(__dirname, 'public');
 app.use(express.static(publicDir));
 
+// Simulated Email Service
+function sendSimulatedEmail(to, subject, body) {
+  console.log('\n======================================================');
+  console.log('📧 SIMULATED EMAIL SENT');
+  console.log(`To:      ${to}`);
+  console.log(`Subject: ${subject}`);
+  console.log('------------------------------------------------------');
+  console.log(body);
+  console.log('======================================================\n');
+}
+
 // In-memory data stores (demo only, resets on restart)
 const users = [];
 const sessions = new Map(); // sessionId -> { userId, createdAt }
@@ -38,7 +49,7 @@ function ensureSeatMap(zoneId) {
     seats.push({
       seatNumber: i,
       hasPower: i % 5 === 0,
-      bookedByUserId: null
+      bookings: [] // Array of { userId, slot, bookedAt, isCheckedIn }
     });
   }
   zoneSeatMaps.set(zoneId, seats);
@@ -53,7 +64,7 @@ const books = [
     author: 'Cormen, Leiserson, Rivest, Stein',
     availableCopies: 3,
     totalCopies: 5,
-    reservedByUserId: null
+    reservedByUserIds: []
   },
   {
     id: 'b2',
@@ -61,7 +72,7 @@ const books = [
     author: 'Russell, Norvig',
     availableCopies: 1,
     totalCopies: 3,
-    reservedByUserId: null
+    reservedByUserIds: []
   },
   {
     id: 'b3',
@@ -69,7 +80,7 @@ const books = [
     author: 'Goodfellow, Bengio, Courville',
     availableCopies: 0,
     totalCopies: 2,
-    reservedByUserId: null
+    reservedByUserIds: []
   },
   {
     id: 'b4',
@@ -77,7 +88,7 @@ const books = [
     author: 'Robert C. Martin',
     availableCopies: 4,
     totalCopies: 4,
-    reservedByUserId: null
+    reservedByUserIds: []
   }
 ];
 
@@ -262,6 +273,13 @@ app.post('/api/auth/signup', async (req, res) => {
   const sessionId = uuidv4();
   sessions.set(sessionId, { userId: user.id, createdAt: new Date().toISOString() });
 
+  // Send Welcome Email
+  sendSimulatedEmail(
+    user.email,
+    'Welcome to Library Insights Hub!',
+    `Hi ${user.name},\n\nThanks for signing up. You can now book seats and reserve books from the dashboard.\n\nHappy studying!`
+  );
+
   res.status(201).json({
     sessionId,
     user: { id: user.id, name: user.name, email: user.email }
@@ -271,14 +289,29 @@ app.post('/api/auth/signup', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) {
-    return res.status(400).json({ message: 'Email and password are required.' });
+    return res.status(400).json({ message: 'Email and password required.' });
   }
 
-  const user = users.find(
-    (u) => u.email.toLowerCase() === String(email).toLowerCase()
-  );
+  // Hardcode an admin entry if it doesn't exist
+  if (email === 'admin@library.com') {
+    let adminUser = users.find((u) => u.email === email);
+    if (!adminUser) {
+      const hashed = await bcrypt.hash('admin123', 10);
+      adminUser = {
+        id: uuidv4(),
+        name: 'Administrator',
+        email,
+        passwordHash: hashed,
+        isAdmin: true
+        // NOTE: admin123 is the password
+      };
+      users.push(adminUser);
+    }
+  }
+
+  const user = users.find((u) => u.email === email);
   if (!user) {
-    return res.status(401).json({ message: 'Invalid email or password.' });
+    return res.status(401).json({ message: 'Invalid credentials.' });
   }
 
   const ok = await bcrypt.compare(String(password), user.passwordHash);
@@ -312,7 +345,7 @@ app.get('/api/auth/me', (req, res) => {
 
 // -------- Seat booking --------
 
-function buildSeatMapResponse(zoneId, user) {
+function buildSeatMapResponse(zoneId, user, slot) {
   const zone = ZONES.find((z) => z.id === zoneId);
   if (!zone) return null;
   const seats = ensureSeatMap(zone.id);
@@ -321,21 +354,28 @@ function buildSeatMapResponse(zoneId, user) {
 
   return {
     zone: { id: zone.id, name: zone.name, capacity: zone.capacity },
-    seats: seats.map((seat) => ({
-      seatNumber: seat.seatNumber,
-      hasPower: seat.hasPower,
-      status: seat.bookedByUserId ? 'booked' : 'free',
-      isMine: Boolean(userId && seat.bookedByUserId === userId)
-    }))
+    seats: seats.map((seat) => {
+      // Find booking for the requested slot
+      const booking = seat.bookings.find(b => !slot || b.slot === slot);
+      
+      return {
+        seatNumber: seat.seatNumber,
+        hasPower: seat.hasPower,
+        status: booking ? 'booked' : 'free',
+        isMine: Boolean(userId && booking && booking.userId === userId),
+        bookedAt: booking ? booking.bookedAt : null,
+        isCheckedIn: booking ? booking.isCheckedIn : false
+      };
+    })
   };
 }
 
 app.get('/api/seats/map', (req, res) => {
-  const { zoneId } = req.query;
+  const { zoneId, slot } = req.query;
   if (!zoneId) return res.status(400).json({ message: 'zoneId is required.' });
 
   const user = findUserBySession(req);
-  const payload = buildSeatMapResponse(zoneId, user);
+  const payload = buildSeatMapResponse(zoneId, user, slot);
   if (!payload) return res.status(404).json({ message: 'Zone not found.' });
 
   res.json(payload);
@@ -345,7 +385,9 @@ app.post('/api/seats/bookSeat', (req, res) => {
   const user = findUserBySession(req);
   if (!user) return res.status(401).json({ message: 'Sign in required to book seats.' });
 
-  const { zoneId, seatNumber } = req.body || {};
+  const { zoneId, seatNumber, slot } = req.body || {};
+  if (!slot) return res.status(400).json({ message: 'Time slot is required.' });
+  
   const zone = ZONES.find((z) => z.id === zoneId);
   if (!zone) return res.status(400).json({ message: 'Invalid zone.' });
 
@@ -353,20 +395,45 @@ app.post('/api/seats/bookSeat', (req, res) => {
   const seat = seats.find((s) => s.seatNumber === Number(seatNumber));
   if (!seat) return res.status(400).json({ message: 'Invalid seat number.' });
 
-  if (seat.bookedByUserId && seat.bookedByUserId !== user.id) {
-    return res.status(409).json({ message: 'Seat already booked.' });
+  // Check if seat is already booked for this slot
+  const existingBooking = seat.bookings.find(b => b.slot === slot);
+  if (existingBooking) {
+    if (existingBooking.userId === user.id) {
+      return res.status(409).json({ message: 'You already booked this seat for this time.' });
+    }
+    return res.status(409).json({ message: 'Seat already booked for this time.' });
   }
 
-  // Optional rule: one seat per user per zone - clear any existing
-  for (const s of seats) {
-    if (s.bookedByUserId === user.id) {
-      s.bookedByUserId = null;
+  // Count existing bookings for this user in this slot
+  let userBookingCount = 0;
+  for (const z of ZONES) {
+    const zSeats = zoneSeatMaps.get(z.id) || [];
+    for (const s of zSeats) {
+       if (s.bookings.some(b => b.userId === user.id && b.slot === slot)) {
+          userBookingCount++;
+       }
     }
   }
 
-  seat.bookedByUserId = user.id;
+  if (userBookingCount >= 2) {
+    return res.status(409).json({ message: 'You can only book up to 2 seats per time slot across all library zones.' });
+  }
 
-  const payload = buildSeatMapResponse(zone.id, user);
+  seat.bookings.push({
+    userId: user.id,
+    slot,
+    bookedAt: Date.now(),
+    isCheckedIn: false
+  });
+
+  // Send Booking Email
+  sendSimulatedEmail(
+    user.email,
+    'Seat Booking Confirmed',
+    `Hi ${user.name},\n\nYou have successfully booked Seat ${seat.seatNumber} in the ${zone.name} for the time slot ${slot}.\n\nYou have 20 minutes from the start of the booking to check in at the library or your seat will be automatically released.\n\nEnjoy!`
+  );
+
+  const payload = buildSeatMapResponse(zone.id, user, slot);
   res.status(201).json({
     message: `Seat ${seat.seatNumber} booked in ${zone.name}.`,
     seatMap: payload
@@ -377,7 +444,7 @@ app.post('/api/seats/releaseSeat', (req, res) => {
   const user = findUserBySession(req);
   if (!user) return res.status(401).json({ message: 'Sign in required.' });
 
-  const { zoneId, seatNumber } = req.body || {};
+  const { zoneId, seatNumber, slot } = req.body || {};
   const zone = ZONES.find((z) => z.id === zoneId);
   if (!zone) return res.status(400).json({ message: 'Invalid zone.' });
 
@@ -385,16 +452,125 @@ app.post('/api/seats/releaseSeat', (req, res) => {
   const seat = seats.find((s) => s.seatNumber === Number(seatNumber));
   if (!seat) return res.status(400).json({ message: 'Invalid seat number.' });
 
-  if (!seat.bookedByUserId || seat.bookedByUserId !== user.id) {
+  const bookingIndex = seat.bookings.findIndex(b => b.userId === user.id && (!slot || b.slot === slot));
+  if (bookingIndex === -1) {
     return res.status(409).json({ message: 'You do not hold this seat.' });
   }
 
-  seat.bookedByUserId = null;
+  // Remove the booking
+  seat.bookings.splice(bookingIndex, 1);
 
-  const payload = buildSeatMapResponse(zone.id, user);
+  const payload = buildSeatMapResponse(zone.id, user, slot);
   res.status(200).json({
     message: `Seat ${seat.seatNumber} released.`,
     seatMap: payload
+  });
+});
+
+app.post('/api/seats/checkIn', (req, res) => {
+  const user = findUserBySession(req);
+  if (!user) return res.status(401).json({ message: 'Sign in required.' });
+
+  const { zoneId, seatNumber, slot } = req.body || {};
+  const zone = ZONES.find((z) => z.id === zoneId);
+  if (!zone) return res.status(400).json({ message: 'Invalid zone.' });
+
+  const seats = ensureSeatMap(zone.id);
+  const seat = seats.find((s) => s.seatNumber === Number(seatNumber));
+  if (!seat) return res.status(400).json({ message: 'Invalid seat number.' });
+
+  const booking = seat.bookings.find(b => b.userId === user.id && (!slot || b.slot === slot));
+  if (!booking) {
+    return res.status(409).json({ message: 'You do not hold this seat.' });
+  }
+
+  if (booking.isCheckedIn) {
+    return res.status(409).json({ message: 'Seat already checked in.' });
+  }
+
+  booking.isCheckedIn = true;
+
+  const payload = buildSeatMapResponse(zone.id, user, slot);
+  res.status(200).json({
+    message: `Successfully checked in to seat ${seat.seatNumber}.`,
+    seatMap: payload
+  });
+});
+
+// Auto-expiry job: Run every minute
+const EXPIRY_MS = 20 * 60 * 1000; // 20 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const zone of ZONES) {
+    const seats = zoneSeatMaps.get(zone.id) || [];
+    for (const seat of seats) {
+      // iterate backwards since we may remove elements
+      for (let i = seat.bookings.length - 1; i >= 0; i--) {
+        const booking = seat.bookings[i];
+        if (!booking.isCheckedIn && booking.bookedAt) {
+          if (now - booking.bookedAt > EXPIRY_MS) {
+            console.log(`Auto-expiring seat ${seat.seatNumber} in ${zone.name} slot ${booking.slot} for user ${booking.userId}`);
+            
+            const bookingUser = users.find(u => u.id === booking.userId);
+            if (bookingUser) {
+              sendSimulatedEmail(
+                bookingUser.email,
+                'Seat Reservation Expired',
+                `Hi ${bookingUser.name},\n\nWe noticed you didn't check in to Seat ${seat.seatNumber} in the ${zone.name} within 20 minutes.\n\nYour reservation for ${booking.slot} has been released so others can study.\n\nBest,\nLibrary Team`
+              );
+            }
+
+            seat.bookings.splice(i, 1);
+          }
+        }
+      }
+    }
+  }
+}, 60 * 1000);
+
+// -------- Admin Dashboard --------
+
+app.get('/api/admin/data', (req, res) => {
+  const user = findUserBySession(req);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ message: 'Forbidden. Admin access required.' });
+  }
+
+  // Gather all seats
+  const allSeatBookings = [];
+  for (const zone of ZONES) {
+    const seats = zoneSeatMaps.get(zone.id) || [];
+    for (const seat of seats) {
+      if (seat.bookings.length > 0) {
+        for (const b of seat.bookings) {
+          const u = users.find((x) => x.id === b.userId);
+          allSeatBookings.push({
+            zoneName: zone.name,
+            seatNumber: seat.seatNumber,
+            slot: b.slot,
+            userName: u ? u.name : 'Unknown User',
+            userEmail: u ? u.email : 'Unknown',
+            isCheckedIn: b.isCheckedIn
+          });
+        }
+      }
+    }
+  }
+
+  res.json({
+    users: users.map(u => ({ id: u.id, name: u.name, email: u.email, isAdmin: !!u.isAdmin })),
+    SeatBookings: allSeatBookings,
+    reservedBooks: books.flatMap(b => 
+      b.reservedByUserIds.map(userId => {
+        const u = users.find((x) => x.id === userId);
+        return {
+          id: b.id,
+          title: b.title,
+          userName: u ? u.name : 'Unknown User',
+          userEmail: u ? u.email : 'Unknown'
+        };
+      })
+    )
   });
 });
 
@@ -419,7 +595,8 @@ app.get('/api/books', (req, res) => {
       author: b.author,
       availableCopies: b.availableCopies,
       totalCopies: b.totalCopies,
-      isReservable: b.availableCopies > 0
+      isReservable: b.availableCopies > 0,
+      reservedByUserIds: b.reservedByUserIds
     }))
   });
 });
@@ -435,8 +612,13 @@ app.post('/api/books/:id/reserve', (req, res) => {
     return res.status(409).json({ message: 'No available copies to reserve.' });
   }
 
+  // Ensure a single user cannot reserve two copies of the same book
+  if (book.reservedByUserIds.includes(user.id)) {
+    return res.status(409).json({ message: 'You have already reserved a copy of this book.' });
+  }
+
   book.availableCopies -= 1;
-  book.reservedByUserId = user.id;
+  book.reservedByUserIds.push(user.id);
 
   res.status(201).json({
     message: 'Book reserved successfully. Please collect it from the desk.',
@@ -453,6 +635,44 @@ app.post('/api/books/:id/reserve', (req, res) => {
 app.get('/api/status', (req, res) => {
   const snapshot = generateSeatSnapshot();
   res.json(snapshot);
+});
+
+// -------- Analytics --------
+
+app.get('/api/analytics/weekly', (req, res) => {
+  // Generate mock historical data for the past 7 days, 8am to 10pm
+  const hours = [];
+  for (let h = 8; h <= 22; h++) {
+    hours.push(`${h}:00`);
+  }
+
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const datasets = [];
+
+  // Generate some realistic-looking curves using our baseDemandFactor
+  for (let d = 0; d < days.length; d++) {
+    const dayData = [];
+    const dayFactor = dayOfWeekFactor(d === 6 ? 0 : d + 1); // map to JS Date getDay (Sun=0)
+
+    for (let h = 8; h <= 22; h++) {
+      const base = baseDemandFactor(h) * dayFactor;
+      // Add random noise
+      const noise = (Math.random() - 0.5) * 0.2;
+      const occupancy = clamp(base + noise, 0.1, 0.95);
+      // Map to out of total capacity (200 seats for 4 zones)
+      dayData.push(Math.round(occupancy * 200));
+    }
+
+    datasets.push({
+      label: days[d],
+      data: dayData
+    });
+  }
+
+  res.json({
+    labels: hours,
+    datasets
+  });
 });
 
 app.get('*', (req, res) => {
