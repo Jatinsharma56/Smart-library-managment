@@ -282,7 +282,7 @@ app.post('/api/auth/signup', async (req, res) => {
 
   res.status(201).json({
     sessionId,
-    user: { id: user.id, name: user.name, email: user.email }
+    user: { id: user.id, name: user.name, email: user.email, isAdmin: !!user.isAdmin }
   });
 });
 
@@ -292,15 +292,17 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(400).json({ message: 'Email and password required.' });
   }
 
+  const normalizedEmail = String(email).toLowerCase();
+
   // Hardcode an admin entry if it doesn't exist
-  if (email === 'admin@library.com') {
-    let adminUser = users.find((u) => u.email === email);
+  if (normalizedEmail === 'admin@library.com') {
+    let adminUser = users.find((u) => u.email === normalizedEmail);
     if (!adminUser) {
       const hashed = await bcrypt.hash('admin123', 10);
       adminUser = {
         id: uuidv4(),
         name: 'Administrator',
-        email,
+        email: normalizedEmail,
         passwordHash: hashed,
         isAdmin: true
         // NOTE: admin123 is the password
@@ -309,7 +311,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
   }
 
-  const user = users.find((u) => u.email === email);
+  const user = users.find((u) => u.email === normalizedEmail);
   if (!user) {
     return res.status(401).json({ message: 'Invalid credentials.' });
   }
@@ -324,7 +326,7 @@ app.post('/api/auth/login', async (req, res) => {
 
   res.json({
     sessionId,
-    user: { id: user.id, name: user.name, email: user.email }
+    user: { id: user.id, name: user.name, email: user.email, isAdmin: !!user.isAdmin }
   });
 });
 
@@ -340,7 +342,7 @@ app.get('/api/auth/me', (req, res) => {
   const user = findUserBySession(req);
   if (!user) return res.status(401).json({ message: 'Not signed in.' });
 
-  res.json({ user: { id: user.id, name: user.name, email: user.email } });
+  res.json({ user: { id: user.id, name: user.name, email: user.email, isAdmin: !!user.isAdmin } });
 });
 
 // -------- Seat booking --------
@@ -441,8 +443,14 @@ app.post('/api/seats/bookSeat', (req, res) => {
 });
 
 app.post('/api/seats/releaseSeat', (req, res) => {
+  return res.status(403).json({ message: 'Only administrators can modify bookings.' });
+});
+
+app.post('/api/seats/adminRelease', (req, res) => {
   const user = findUserBySession(req);
-  if (!user) return res.status(401).json({ message: 'Sign in required.' });
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ message: 'Forbidden. Admin access required.' });
+  }
 
   const { zoneId, seatNumber, slot } = req.body || {};
   const zone = ZONES.find((z) => z.id === zoneId);
@@ -452,9 +460,9 @@ app.post('/api/seats/releaseSeat', (req, res) => {
   const seat = seats.find((s) => s.seatNumber === Number(seatNumber));
   if (!seat) return res.status(400).json({ message: 'Invalid seat number.' });
 
-  const bookingIndex = seat.bookings.findIndex(b => b.userId === user.id && (!slot || b.slot === slot));
+  const bookingIndex = seat.bookings.findIndex(b => !slot || b.slot === slot);
   if (bookingIndex === -1) {
-    return res.status(409).json({ message: 'You do not hold this seat.' });
+    return res.status(404).json({ message: 'No booking found for this seat.' });
   }
 
   // Remove the booking
@@ -469,9 +477,10 @@ app.post('/api/seats/releaseSeat', (req, res) => {
 
 app.post('/api/seats/checkIn', (req, res) => {
   const user = findUserBySession(req);
-  if (!user) return res.status(401).json({ message: 'Sign in required.' });
+  // Ensure the user checking in is an admin
+  if (!user || !user.isAdmin) return res.status(403).json({ message: 'Only administrators can check users in.' });
 
-  const { zoneId, seatNumber, slot } = req.body || {};
+  const { zoneId, seatNumber, slot, userId } = req.body || {};
   const zone = ZONES.find((z) => z.id === zoneId);
   if (!zone) return res.status(400).json({ message: 'Invalid zone.' });
 
@@ -479,9 +488,10 @@ app.post('/api/seats/checkIn', (req, res) => {
   const seat = seats.find((s) => s.seatNumber === Number(seatNumber));
   if (!seat) return res.status(400).json({ message: 'Invalid seat number.' });
 
-  const booking = seat.bookings.find(b => b.userId === user.id && (!slot || b.slot === slot));
+  // Use the provided userId to find the booking, as the admin is making the request
+  const booking = seat.bookings.find(b => (!slot || b.slot === slot));
   if (!booking) {
-    return res.status(409).json({ message: 'You do not hold this seat.' });
+    return res.status(404).json({ message: 'Booking not found.' });
   }
 
   if (booking.isCheckedIn) {
@@ -545,9 +555,11 @@ app.get('/api/admin/data', (req, res) => {
         for (const b of seat.bookings) {
           const u = users.find((x) => x.id === b.userId);
           allSeatBookings.push({
+            zoneId: zone.id,
             zoneName: zone.name,
             seatNumber: seat.seatNumber,
             slot: b.slot,
+            userId: b.userId,
             userName: u ? u.name : 'Unknown User',
             userEmail: u ? u.email : 'Unknown',
             isCheckedIn: b.isCheckedIn

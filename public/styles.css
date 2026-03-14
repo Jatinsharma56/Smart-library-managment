@@ -666,6 +666,11 @@ select:focus {
   border: 1px solid #93c5fd;
 }
 
+.seat-dot--checked-in {
+  background: radial-gradient(circle at top left, rgba(239, 68, 68, 0.9), rgba(185, 28, 28, 1));
+  border: 1px solid #fca5a5;
+}
+
 .seat-dot--power {
   background: #1f2937;
   border: 1px solid #facc15;
@@ -776,6 +781,14 @@ select:focus {
   border-color: #93c5fd;
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.4);
   animation: pulseSeat 2s infinite;
+}
+
+.seat-cell--checked-in {
+  background: radial-gradient(circle at top left, rgba(239, 68, 68, 0.9), rgba(185, 28, 28, 1));
+  border-color: #fca5a5;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+  color: white;
+  animation: none;
 }
 
 @keyframes pulseSeat {

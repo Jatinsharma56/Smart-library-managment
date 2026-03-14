@@ -19,8 +19,8 @@
         <div class="top-bar-left">
           <div class="logo-circle">L</div>
           <div class="brand">
-            <h1>Library Insights Hub</h1>
-            <p>Live seat availability &amp; crowd insights</p>
+            <h1><a href="index.html" style="text-decoration: none; color: inherit;">Library Insights Hub</a></h1>
+            <p>Book Search & Reservations</p>
           </div>
         </div>
         <div class="top-bar-right">
@@ -38,31 +38,27 @@
         </div>
       </header>
 
-      <main class="launchpad-main" style="padding: 24px; max-width: 1200px; margin: 0 auto;">
-        <section class="panel" style="margin-bottom: 32px; text-align: center;">
-          <div class="panel-header" style="justify-content: center;">
-            <h2 style="font-size: 2rem; margin-bottom: 8px;">Welcome to Library Insights Hub</h2>
+      <main style="padding: 24px; max-width: 800px; margin: 0 auto;">
+        <section class="panel">
+          <div class="panel-header">
+            <h2>Book Search & Issue</h2>
+            <p class="panel-subtitle">Find and reserve books available in the library.</p>
           </div>
-          <p class="panel-subtitle" style="font-size: 1.1rem;">Select a portal below to get started.</p>
+          <div style="margin-top: 20px;">
+            <div class="form-row" style="display: flex; gap: 12px; margin-bottom: 24px;">
+              <input
+                id="bookSearchInput"
+                type="search"
+                placeholder="Search by title or author"
+                style="flex: 1; padding: 12px; font-size: 1rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-main);"
+              />
+              <button id="bookSearchButton" class="btn-primary" style="padding: 0 24px; white-space: nowrap;">
+                🔍 Search Books
+              </button>
+            </div>
+            <div id="bookResults" class="book-results" style="display: grid; gap: 16px;"></div>
+          </div>
         </section>
-        
-        <div class="summary-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
-          <a href="seat-booking.html" class="summary-card" style="text-decoration: none; display: flex; flex-direction: column; align-items: center; padding: 40px 20px; transition: transform 0.2s; cursor: pointer;">
-            <p class="summary-value highlight" style="font-size: 4rem; margin-bottom: 16px;">🪑</p>
-            <h3 style="font-size: 1.5rem; color: var(--text-main); margin-bottom: 8px;">Seat Booking</h3>
-            <p class="summary-sub">Live availability & check-ins</p>
-          </a>
-          <a href="book-issue.html" class="summary-card" style="text-decoration: none; display: flex; flex-direction: column; align-items: center; padding: 40px 20px; transition: transform 0.2s; cursor: pointer;">
-            <p class="summary-value highlight" style="font-size: 4rem; margin-bottom: 16px;">📚</p>
-            <h3 style="font-size: 1.5rem; color: var(--text-main); margin-bottom: 8px;">Book Issue</h3>
-            <p class="summary-sub">Search & reserve books</p>
-          </a>
-          <a href="admin.html" class="summary-card" style="text-decoration: none; display: flex; flex-direction: column; align-items: center; padding: 40px 20px; transition: transform 0.2s; cursor: pointer;">
-            <p class="summary-value highlight" style="font-size: 4rem; margin-bottom: 16px;">⚙️</p>
-            <h3 style="font-size: 1.5rem; color: var(--text-main); margin-bottom: 8px;">Admin Dashboard</h3>
-            <p class="summary-sub">Manage library operations</p>
-          </a>
-        </div>
       </main>
 
       <footer class="footer">

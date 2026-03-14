@@ -3,7 +3,7 @@ const REFRESH_INTERVAL_MS = 10_000;
 
 let latestSnapshot = null;
 let autoRefreshTimer = null;
-let sessionId = null;
+let sessionId = localStorage.getItem('librarySessionId') || null;
 let currentUser = null;
 
 const totalCapacityEl = document.getElementById('totalCapacity');
@@ -47,11 +47,6 @@ const seatZoneSelectEl = document.getElementById('seatZoneSelect');
 const seatTimeSlotSelectEl = document.getElementById('seatTimeSlotSelect');
 const seatMapGridEl = document.getElementById('seatMapGrid');
 const seatBookMessageEl = document.getElementById('seatBookMessage');
-const checkInPanelEl = document.getElementById('checkInPanel');
-const checkInTimerTextEl = document.getElementById('checkInTimerText');
-const checkInStatusTextEl = document.getElementById('checkInStatusText');
-const checkInButtonEl = document.getElementById('checkInButton');
-const checkOutButtonEl = document.getElementById('checkOutButton');
 
 const bookSearchInputEl = document.getElementById('bookSearchInput');
 const bookSearchButtonEl = document.getElementById('bookSearchButton');
@@ -81,10 +76,11 @@ async function fetchStatus() {
 }
 
 function showErrorState() {
+  if (!crowdLabelEl) return;
   crowdLabelEl.textContent = 'Connection issue';
   crowdLabelEl.style.background =
     'radial-gradient(circle at 0 0, rgba(248,113,113,0.5), transparent), rgba(15,23,42,0.95)';
-  lastUpdatedEl.textContent = 'Last updated: unable to reach server';
+  if (lastUpdatedEl) lastUpdatedEl.textContent = 'Last updated: unable to reach server';
 }
 
 function formatTime(isoString) {
@@ -116,6 +112,7 @@ function humanLabelFromKey(key) {
 }
 
 function renderSnapshot(snapshot) {
+  if (!totalCapacityEl) return;
   const { total, aiInsight, zones, generatedAt } = snapshot;
 
   totalCapacityEl.textContent = total.capacity.toString();
@@ -299,25 +296,31 @@ function stopAutoRefresh() {
   }
 }
 
-sortSelectEl.addEventListener('change', () => {
-  if (latestSnapshot) {
-    renderZones(latestSnapshot.zones);
-  }
-});
+if (sortSelectEl) {
+  sortSelectEl.addEventListener('change', () => {
+    if (latestSnapshot) {
+      renderZones(latestSnapshot.zones);
+    }
+  });
+}
 
-filterSelectEl.addEventListener('change', () => {
-  if (latestSnapshot) {
-    renderZones(latestSnapshot.zones);
-  }
-});
+if (filterSelectEl) {
+  filterSelectEl.addEventListener('change', () => {
+    if (latestSnapshot) {
+      renderZones(latestSnapshot.zones);
+    }
+  });
+}
 
-autoRefreshToggleEl.addEventListener('change', (e) => {
-  if (e.target.checked) {
-    startAutoRefresh();
-  } else {
-    stopAutoRefresh();
-  }
-});
+if (autoRefreshToggleEl) {
+  autoRefreshToggleEl.addEventListener('change', (e) => {
+    if (e.target.checked) {
+      startAutoRefresh();
+    } else {
+      stopAutoRefresh();
+    }
+  });
+}
 
 // ----- Auth UI -----
 
@@ -349,6 +352,10 @@ function setAuthState(user, session) {
   currentUser = user;
   sessionId = session || sessionId;
 
+  if (sessionId) {
+    localStorage.setItem('librarySessionId', sessionId);
+  }
+
   if (currentUser) {
     authUserInfoEl.classList.remove('auth-user-info--hidden');
     authUserNameEl.textContent = currentUser.name || currentUser.email;
@@ -358,16 +365,22 @@ function setAuthState(user, session) {
     }
     bootstrapAfterAuth();
   } else {
+    localStorage.removeItem('librarySessionId');
     authUserInfoEl.classList.add('auth-user-info--hidden');
     authUserNameEl.textContent = '';
     authOpenButtonEl.textContent = 'Login / Signup';
-    seatMapGridEl.innerHTML =
-      '<div class="sidebar-feedback">Login to see your seat map.</div>';
+    if (seatMapGridEl) {
+      seatMapGridEl.innerHTML =
+        '<div class="sidebar-feedback">Login to see your seat map.</div>';
+    }
   }
 }
 
 async function checkCurrentUser() {
-  if (!sessionId) return false;
+  if (!sessionId) {
+    setAuthState(null, null);
+    return false;
+  }
   try {
     const res = await fetch('/api/auth/me', {
       headers: {
@@ -387,88 +400,100 @@ async function checkCurrentUser() {
   }
 }
 
-authOpenButtonEl.addEventListener('click', async () => {
-  if (currentUser && sessionId) {
-    try {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: {
-          'x-session-id': sessionId
-        }
-      });
-    } catch {
-      // ignore
+if (authOpenButtonEl) {
+  authOpenButtonEl.addEventListener('click', async () => {
+    if (currentUser && sessionId) {
+      try {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: {
+            'x-session-id': sessionId
+          }
+        });
+      } catch {
+        // ignore
+      }
+      setAuthState(null, null);
+      return;
     }
-    setAuthState(null, null);
-    return;
-  }
 
-  openAuthDialog('login');
-});
+    openAuthDialog('login');
+  });
+}
 
-authCloseButtonEl.addEventListener('click', () => {
-  closeAuthDialog();
-});
+if (authCloseButtonEl) {
+  authCloseButtonEl.addEventListener('click', () => {
+    closeAuthDialog();
+  });
+}
 
-authTabLoginEl.addEventListener('click', () => {
-  openAuthDialog('login');
-});
+if (authTabLoginEl) {
+  authTabLoginEl.addEventListener('click', () => {
+    openAuthDialog('login');
+  });
+}
 
-authTabSignupEl.addEventListener('click', () => {
-  openAuthDialog('signup');
-});
+if (authTabSignupEl) {
+  authTabSignupEl.addEventListener('click', () => {
+    openAuthDialog('signup');
+  });
+}
 
-authFormEl.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  authFeedbackEl.textContent = '';
-  authFeedbackEl.classList.remove(
-    'sidebar-feedback--success',
-    'sidebar-feedback--error'
-  );
+if (authFormEl) {
+  authFormEl.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    authFeedbackEl.textContent = '';
+    authFeedbackEl.classList.remove(
+      'sidebar-feedback--success',
+      'sidebar-feedback--error'
+    );
 
-  const email = authEmailInputEl.value.trim();
-  const password = authPasswordInputEl.value.trim();
-  const name = authNameInputEl.value.trim();
+    const email = authEmailInputEl.value.trim();
+    const password = authPasswordInputEl.value.trim();
+    const name = authNameInputEl.value.trim();
 
-  if (!email || !password || (authMode === 'signup' && !name)) {
-    authFeedbackEl.textContent = 'Please fill in all required fields.';
-    authFeedbackEl.classList.add('sidebar-feedback--error');
-    return;
-  }
-
-  authSubmitButtonEl.disabled = true;
-  authSubmitButtonEl.textContent = 'Please wait…';
-
-  try {
-    const endpoint = authMode === 'signup' ? '/api/auth/signup' : '/api/auth/login';
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ name, email, password })
-    });
-
-    const data = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      authFeedbackEl.textContent = data.message || 'Something went wrong.';
+    if (!email || !password || (authMode === 'signup' && !name)) {
+      authFeedbackEl.textContent = 'Please fill in all required fields.';
       authFeedbackEl.classList.add('sidebar-feedback--error');
       return;
     }
 
-    sessionId = data.sessionId;
-    setAuthState(data.user, data.sessionId);
-    closeAuthDialog();
-  } catch (err) {
-    console.error(err);
-    authFeedbackEl.textContent = 'Unable to reach server.';
-    authFeedbackEl.classList.add('sidebar-feedback--error');
-  } finally {
-    authSubmitButtonEl.disabled = false;
-    authSubmitButtonEl.textContent = 'Continue';
-  }
-});
+    authSubmitButtonEl.disabled = true;
+    authSubmitButtonEl.textContent = 'Please wait…';
+
+    try {
+      const endpoint = authMode === 'signup' ? '/api/auth/signup' : '/api/auth/login';
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ name, email, password })
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        authFeedbackEl.textContent = data.message || 'Something went wrong.';
+        authFeedbackEl.classList.add('sidebar-feedback--error');
+        return;
+      }
+
+      sessionId = data.sessionId;
+      setAuthState(data.user, data.sessionId);
+      closeAuthDialog();
+    } catch (err) {
+      console.error(err);
+      authFeedbackEl.textContent = 'Unable to reach server.';
+      authFeedbackEl.classList.add('sidebar-feedback--error');
+    } finally {
+      if (authSubmitButtonEl) {
+        authSubmitButtonEl.disabled = false;
+        authSubmitButtonEl.textContent = 'Continue';
+      }
+    }
+  });
+}
 
 // ----- Seat booking with seat map -----
 
@@ -500,9 +525,10 @@ async function loadSeatMap(zoneId, slot) {
   );
 
   if (!currentUser || !sessionId) {
-    seatMapGridEl.innerHTML =
-      '<div class="sidebar-feedback sidebar-feedback--error">Login to view and book seats.</div>';
-    checkInPanelEl.classList.add('hidden');
+    if (seatMapGridEl) {
+      seatMapGridEl.innerHTML =
+        '<div class="sidebar-feedback sidebar-feedback--error">Login to view and book seats.</div>';
+    }
     return;
   }
 
@@ -543,7 +569,7 @@ function updateSidebarStatus() {
   
   const uncheckedSeats = mySeats.filter(s => !s.isCheckedIn);
   if (uncheckedSeats.length > 0) {
-    sidebarCheckInStatus.innerHTML = `<span style="color: var(--accent-strong); font-size: 0.8rem; font-weight: 600;">⚠️ You have ${uncheckedSeats.length} un-checked in seats!</span>`;
+    sidebarCheckInStatus.innerHTML = `<span style="color: var(--accent-strong); font-size: 0.8rem; font-weight: 600;">⌛ Pending check-in for ${uncheckedSeats.length} seats.</span>`;
   } else {
     sidebarCheckInStatus.innerHTML = `<span style="color: #10b981; font-size: 0.8rem;">✅ Checked in to ${mySeats.length} seats.</span>`;
   }
@@ -563,9 +589,13 @@ function renderSeatMap() {
     cell.className = 'seat-cell';
 
     if (seat.status === 'booked') {
-      cell.classList.add('seat-cell--booked');
+      if (seat.isCheckedIn) {
+        cell.classList.add('seat-cell--checked-in');
+      } else {
+        cell.classList.add('seat-cell--booked');
+      }
     }
-    if (seat.isMine) {
+    if (seat.isMine && !seat.isCheckedIn) {
       cell.classList.add('seat-cell--yours');
     }
     if (seat.hasPower) {
@@ -576,10 +606,13 @@ function renderSeatMap() {
     let titleMsg = `Seat ${seat.seatNumber}`;
     if (seat.hasPower) titleMsg += ' (Electric Port)';
     
-    if (seat.isMine) {
-      titleMsg += ' - Booked by you';
+    if (seat.isCheckedIn) {
+      if (seat.isMine) titleMsg += ' - Occupied by you';
+      else titleMsg += ' - Occupied';
+    } else if (seat.isMine) {
+      titleMsg += ' - Booked by you (Pending)';
     } else if (seat.status === 'booked') {
-      titleMsg += ' - Booked';
+      titleMsg += ' - Booked (Pending)';
     } else {
       titleMsg += ' - Free';
     }
@@ -594,214 +627,7 @@ function renderSeatMap() {
     seatMapGridEl.appendChild(cell);
   });
 
-  updateCheckInUI();
   updateSidebarStatus();
-}
-
-let checkInCountdownTimer = null;
-
-function updateCheckInUI() {
-  if (checkInCountdownTimer) {
-    clearInterval(checkInCountdownTimer);
-    checkInCountdownTimer = null;
-  }
-
-  if (!seatMapData || !seatMapData.seats) {
-    checkInPanelEl.classList.add('hidden');
-    if (checkOutButtonEl) {
-      checkOutButtonEl.classList.add('hidden');
-    }
-    return;
-  }
-
-  const mySeats = seatMapData.seats.filter(s => s.isMine);
-  
-  if (mySeats.length === 0) {
-    checkInPanelEl.classList.add('hidden');
-    if (checkOutButtonEl) {
-      checkOutButtonEl.classList.add('hidden');
-    }
-    return;
-  }
-
-  checkInPanelEl.classList.remove('hidden');
-
-  const uncheckedSeats = mySeats.filter(s => !s.isCheckedIn);
-
-  if (uncheckedSeats.length === 0) {
-    checkInPanelEl.classList.add('checked-in');
-    checkInTimerTextEl.textContent = 'Checked In';
-    checkInStatusTextEl.textContent = `Seats: ${mySeats.map(s => s.seatNumber).join(', ')}`;
-    checkInButtonEl.style.display = 'none';
-    if (checkOutButtonEl) {
-      checkOutButtonEl.classList.remove('hidden');
-      checkOutButtonEl.style.display = 'block';
-    }
-  } else {
-    checkInPanelEl.classList.remove('checked-in');
-    checkInButtonEl.style.display = 'block';
-    if (checkOutButtonEl) {
-      checkOutButtonEl.style.display = 'none';
-    }
-    checkInStatusTextEl.textContent = 'to check in';
-    
-    // Start countdown timer locally using the oldest bookedAt timestamp
-    const oldestSeat = uncheckedSeats.reduce((a, b) => (a.bookedAt < b.bookedAt ? a : b));
-
-    if (oldestSeat.bookedAt) {
-      const EXPIRY_MS = 20 * 60 * 1000;
-      
-      const tick = () => {
-        const now = Date.now();
-        const elapsed = now - oldestSeat.bookedAt;
-        const remaining = EXPIRY_MS - elapsed;
-        
-        if (remaining <= 0) {
-          checkInTimerTextEl.textContent = '00:00';
-          checkInStatusTextEl.textContent = 'Expired. Refreshing...';
-          clearInterval(checkInCountdownTimer);
-          setTimeout(() => {
-            loadSeatMap(selectedZoneId || seatZoneSelectEl.value, selectedTimeSlot);
-            updateSidebarStatus();
-          }, 2000);
-          return;
-        }
-        
-        const mins = Math.floor(remaining / 60000);
-        const secs = Math.floor((remaining % 60000) / 1000);
-        checkInTimerTextEl.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-      };
-      
-      tick();
-      checkInCountdownTimer = setInterval(tick, 1000);
-    } else {
-      checkInTimerTextEl.textContent = '20:00';
-    }
-  }
-}
-
-async function handleCheckInClick() {
-  if (!currentUser || !sessionId) return;
-  
-  const mySeats = seatMapData?.seats.filter(s => s.isMine && !s.isCheckedIn);
-  if (!mySeats || mySeats.length === 0) return;
-
-  checkInButtonEl.disabled = true;
-  checkInButtonEl.textContent = 'Verifying...';
-
-  try {
-    let hasError = false;
-    let lastErrorMsg = '';
-    
-    // Check in all owned seats that aren't checked in yet
-    for (const seat of mySeats) {
-      const res = await fetch('/api/seats/checkIn', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-session-id': sessionId
-        },
-        body: JSON.stringify({ 
-          zoneId: selectedZoneId || seatZoneSelectEl.value, 
-          seatNumber: seat.seatNumber,
-          slot: selectedTimeSlot
-        })
-      });
-
-      const data = await res.json().catch(() => ({}));
-      
-      if (!res.ok) {
-        hasError = true;
-        lastErrorMsg = data.message || 'Check-in failed.';
-      } else if (data.seatMap) {
-        seatMapData = data.seatMap; // update with latest
-      }
-    }
-    
-    if (hasError) {
-      seatBookMessageEl.textContent = lastErrorMsg;
-      seatBookMessageEl.classList.add('sidebar-feedback--error');
-    } else {
-      seatBookMessageEl.textContent = 'Checked in successfully.';
-      seatBookMessageEl.classList.add('sidebar-feedback--success');
-    }
-    
-    renderSeatMap();
-  } catch (err) {
-    seatBookMessageEl.textContent = 'Unable to reach server.';
-    seatBookMessageEl.classList.add('sidebar-feedback--error');
-  } finally {
-    checkInButtonEl.disabled = false;
-    checkInButtonEl.textContent = 'Check In Now';
-  }
-}
-
-async function handleCheckOutClick() {
-  if (!currentUser || !sessionId) return;
-  
-  const mySeats = seatMapData?.seats.filter(s => s.isMine);
-  if (!mySeats || mySeats.length === 0) return;
-
-  if (checkOutButtonEl) {
-    checkOutButtonEl.disabled = true;
-    checkOutButtonEl.textContent = 'Releasing...';
-  }
-
-  try {
-    let hasError = false;
-    let lastErrorMsg = '';
-    
-    // Release all owned seats
-    for (const seat of mySeats) {
-      const res = await fetch('/api/seats/releaseSeat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-session-id': sessionId
-        },
-        body: JSON.stringify({ 
-          zoneId: selectedZoneId || seatZoneSelectEl.value, 
-          seatNumber: seat.seatNumber,
-          slot: selectedTimeSlot
-        })
-      });
-
-      const data = await res.json().catch(() => ({}));
-      
-      if (!res.ok) {
-        hasError = true;
-        lastErrorMsg = data.message || 'Check-out failed.';
-      } else if (data.seatMap) {
-        seatMapData = data.seatMap; // update with latest
-      }
-    }
-    
-    if (hasError) {
-      seatBookMessageEl.textContent = lastErrorMsg;
-      seatBookMessageEl.classList.add('sidebar-feedback--error');
-    } else {
-      seatBookMessageEl.textContent = 'Checked out successfully. Seat is now available.';
-      seatBookMessageEl.classList.add('sidebar-feedback--success');
-    }
-    
-    renderSeatMap();
-  } catch (err) {
-    seatBookMessageEl.textContent = 'Unable to reach server.';
-    seatBookMessageEl.classList.add('sidebar-feedback--error');
-  } finally {
-    if (checkOutButtonEl) {
-      checkOutButtonEl.disabled = false;
-      checkOutButtonEl.textContent = 'Check Out Early';
-    }
-  }
-}
-
-if (checkInButtonEl) {
-  checkInButtonEl.addEventListener('click', handleCheckInClick);
-}
-
-if (checkOutButtonEl) {
-  checkOutButtonEl.addEventListener('click', handleCheckOutClick);
 }
 
 async function handleSeatClick(seat) {
@@ -818,7 +644,13 @@ async function handleSeatClick(seat) {
 
   const zoneId = selectedZoneId || seatZoneSelectEl.value;
 
-  const endpoint = seat.isMine ? '/api/seats/releaseSeat' : '/api/seats/bookSeat';
+  if (seat.isMine) {
+    seatBookMessageEl.textContent = 'Only an administrator can remove your booking. Please ask the desk.';
+    seatBookMessageEl.classList.add('sidebar-feedback--error');
+    return;
+  }
+
+  const endpoint = '/api/seats/bookSeat';
 
   try {
     const res = await fetch(endpoint, {
@@ -875,6 +707,7 @@ if (seatTimeSlotSelectEl) {
 // ----- Book search & reservations -----
 
 async function runBookSearch() {
+  if (!bookSearchInputEl || !bookResultsEl) return;
   const q = bookSearchInputEl.value.trim();
   bookResultsEl.innerHTML = '';
   const url = q ? `/api/books?q=${encodeURIComponent(q)}` : '/api/books';
@@ -989,16 +822,20 @@ async function reserveBook(bookId, buttonEl, availabilityEl) {
   }
 }
 
-bookSearchButtonEl.addEventListener('click', () => {
-  runBookSearch();
-});
-
-bookSearchInputEl.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    e.preventDefault();
+if (bookSearchButtonEl) {
+  bookSearchButtonEl.addEventListener('click', () => {
     runBookSearch();
-  }
-});
+  });
+}
+
+if (bookSearchInputEl) {
+  bookSearchInputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      runBookSearch();
+    }
+  });
+}
 
 // ----- Bootstrap -----
 

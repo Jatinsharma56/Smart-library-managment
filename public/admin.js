@@ -94,6 +94,10 @@ async function fetchDashboardData() {
           <td>${b.slot}</td>
           <td>${b.userName} <br/><small style="color:var(--text-soft)">${b.userEmail}</small></td>
           <td><span class="badge ${b.isCheckedIn ? 'success' : ''}">${b.isCheckedIn ? 'Checked In' : 'Pending'}</span></td>
+          <td>
+            ${!b.isCheckedIn ? `<button onclick="adminCheckIn('${b.zoneId}', ${b.seatNumber}, '${b.slot}', '${b.userId}')" style="margin-right: 5px; padding: 4px 8px; font-size: 0.8rem; cursor: pointer; background: #10b981; color: white; border: none; border-radius: 4px;">Check In</button>` : ''}
+            <button onclick="adminReleaseSeat('${b.zoneId}', ${b.seatNumber}, '${b.slot}')" style="padding: 4px 8px; font-size: 0.8rem; cursor: pointer; background: #ef4444; color: white; border: none; border-radius: 4px;">Remove</button>
+          </td>
         `;
         bookingsTableBody.appendChild(tr);
       });
@@ -119,6 +123,51 @@ async function fetchDashboardData() {
 
   } catch (err) {
     console.error('Failed to load dashboard', err);
+  }
+}
+
+// Admin Action Functions
+async function adminCheckIn(zoneId, seatNumber, slot, userId) {
+  try {
+    const res = await fetch('/api/seats/checkIn', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': sessionId
+      },
+      body: JSON.stringify({ zoneId, seatNumber, slot, userId })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.message || 'Check-in failed');
+    }
+    // Refresh the dashboard
+    await fetchDashboardData();
+  } catch (err) {
+    alert('Failed to connect to server.');
+  }
+}
+
+async function adminReleaseSeat(zoneId, seatNumber, slot) {
+  if (!confirm('Are you sure you want to remove this booking?')) return;
+  
+  try {
+    const res = await fetch('/api/seats/adminRelease', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': sessionId
+      },
+      body: JSON.stringify({ zoneId, seatNumber, slot })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.message || 'Release failed');
+    }
+    // Refresh the dashboard
+    await fetchDashboardData();
+  } catch (err) {
+    alert('Failed to connect to server.');
   }
 }
 

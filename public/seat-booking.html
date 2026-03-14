@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Library Insights Hub</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <div class="page">
+      <header class="top-bar">
+        <div class="top-bar-left">
+          <div class="logo-circle">L</div>
+          <div class="brand">
+            <h1><a href="index.html" style="text-decoration: none; color: inherit;">Library Insights Hub</a></h1>
+            <p>Seat Booking & Live Availability</p>
+          </div>
+        </div>
+        <div class="top-bar-right">
+          <div class="auth-controls">
+            <div id="authUserInfo" class="auth-user-info auth-user-info--hidden">
+              <span id="authUserName"></span>
+            </div>
+            <button id="authOpenButton" class="btn-ghost-small">Login / Signup</button>
+          </div>
+          <label class="toggle">
+            <span>Auto-refresh</span>
+            <input type="checkbox" id="autoRefreshToggle" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </header>
+
+      <main>
+        <!-- Seat Map Top -->
+        <section class="panel" style="margin-bottom: 24px;">
+          <div class="panel-header">
+            <h2>Interactive Seat Map</h2>
+            <p class="panel-subtitle">Reserve up to 2 seats for your study session</p>
+          </div>
+          
+          <div class="seat-controls-row" style="margin-top: 10px; margin-bottom: 24px; display: flex; gap: 20px;">
+            <div class="form-row" style="flex: 1; margin: 0;">
+              <select id="seatZoneSelect">
+                <option value="silent">Silent Study Zone</option>
+                <option value="collab">Collaborative Zone</option>
+                <option value="computers">Computer Lab</option>
+                <option value="reading">Reading Room</option>
+              </select>
+            </div>
+            <div class="form-row" style="flex: 1; margin: 0;">
+              <select id="seatTimeSlotSelect">
+                <option value="now-2hrs">Now (Next 2 hours)</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; margin-bottom: 24px; gap: 20px;">
+            <div class="seat-legend" style="flex: 1; justify-content: flex-start; gap: 24px; margin: 0;">
+              <span><span class="seat-dot seat-dot--free"></span>Free</span>
+              <span><span class="seat-dot seat-dot--booked"></span>Booked</span>
+              <span><span class="seat-dot seat-dot--yours"></span>Your seat (Pending)</span>
+              <span><span class="seat-dot seat-dot--checked-in"></span>Occupied</span>
+              <span><span class="seat-dot seat-dot--power">⚡</span>Electric port</span>
+            </div>
+          </div>
+
+          <div id="seatMapGrid" class="seat-map-grid" style="grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); gap: 12px; padding: 24px;"></div>
+          <p id="seatBookMessage" class="sidebar-feedback"></p>
+        </section>
+
+        <!-- Graph Next -->
+        <section class="panel panel-analytics" style="margin-bottom: 24px;">
+          <div class="panel-header">
+            <h2>Weekly Occupancy Patterns</h2>
+            <p class="panel-subtitle">Average historical crowd levels</p>
+          </div>
+          <div class="chart-container" style="position: relative; height:300px; width:100%">
+            <canvas id="weeklyAnalyticsChart"></canvas>
+          </div>
+        </section>
+
+        <!-- Other Layout Elements -->
+        <div class="layout">
+          <section class="panel panel-main">
+            <div class="panel-header">
+              <h2>Overall status</h2>
+              <span class="badge" id="crowdLabel">Loading…</span>
+            </div>
+
+            <div class="summary-grid">
+              <div class="summary-card">
+                <h3>Total seats</h3>
+                <p class="summary-value" id="totalCapacity">-</p>
+                <p class="summary-sub">Across all study zones</p>
+              </div>
+              <div class="summary-card">
+                <h3>Available now</h3>
+                <p class="summary-value highlight" id="availableSeats">-</p>
+                <p class="summary-sub">
+                  <span id="occupancyPct">-</span> of seats currently occupied
+                </p>
+              </div>
+              <div class="summary-card">
+                <h3>AI insight</h3>
+                <p class="summary-value small" id="aiForecastLabel">-</p>
+                <p class="summary-sub">
+                  Forecast for next
+                  <span id="aiForecastMinutes">-</span>
+                  minutes
+                </p>
+              </div>
+            </div>
+            
+            <div id="smartRecommendation" class="smart-recommendation hidden">
+              <div class="smart-recommendation-icon">💡</div>
+              <div class="smart-recommendation-content">
+                <h4>Best Space Right Now</h4>
+                <p id="smartRecommendationText">Finding the quietest spot...</p>
+              </div>
+            </div>
+
+            <div class="density-bar">
+              <div class="density-bar-header">
+                <span>Live crowd level</span>
+                <span id="lastUpdated" class="last-updated">Last updated: —</span>
+              </div>
+              <div class="density-bar-track">
+                <div id="densityFill" class="density-bar-fill"></div>
+                <div class="density-marker low">Quiet</div>
+                <div class="density-marker mid">Moderate</div>
+                <div class="density-marker high">Very busy</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel panel-secondary">
+            <div class="panel-header">
+              <h2>Zones</h2>
+              <div class="filters">
+                <select id="sortSelect">
+                  <option value="occupancy-desc">Busiest first</option>
+                  <option value="occupancy-asc">Quietest first</option>
+                  <option value="name-asc">Name (A–Z)</option>
+                </select>
+                <select id="filterSelect">
+                  <option value="all">All crowd levels</option>
+                  <option value="quiet">Quiet only</option>
+                  <option value="moderate">Moderate</option>
+                  <option value="busy">Busy &amp; very busy</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="zonesGrid" class="zones-grid"></div>
+          </section>
+
+          <section class="panel panel-sidebar">
+            <div class="panel-header panel-header--stacked">
+              <div>
+                <h2>User actions</h2>
+                <p class="panel-subtitle">
+                  Reserve books & view AI forecast once signed in.
+                </p>
+              </div>
+            </div>
+
+            <div class="sidebar-section sidebar-section--forecast" style="margin-top: 20px;">
+              <h3 class="sidebar-title">AI crowd forecast</h3>
+              <p class="sidebar-text">
+                Short-term prediction of how busy the library may get in the next
+                hour.
+              </p>
+              <ul id="forecastList" class="forecast-list"></ul>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      <footer class="footer">
+        <span>
+          Designed for students to quickly check library crowding before they
+          travel.
+        </span>
+        <span class="hint">
+          Tip: toggle <strong>Auto-refresh</strong> for live updates every 10
+          seconds.
+        </span>
+      </footer>
+    </div>
+
+    <div id="authDialogBackdrop" class="auth-backdrop auth-backdrop--hidden">
+      <div class="auth-dialog">
+        <div class="auth-dialog-header">
+          <h2>Access Library Hub</h2>
+          <button id="authCloseButton" class="btn-icon" aria-label="Close">
+            ✕
+          </button>
+        </div>
+        <p class="auth-dialog-sub">
+          Create a simple account to book seats and reserve books.
+        </p>
+        <div class="auth-tabs">
+          <button
+            id="authTabLogin"
+            class="auth-tab auth-tab--active"
+            type="button"
+          >
+            Login
+          </button>
+          <button id="authTabSignup" class="auth-tab" type="button">
+            Signup
+          </button>
+        </div>
+        <form id="authForm" class="auth-form">
+          <div id="authNameRow" class="form-row form-row--hidden">
+            <input
+              id="authNameInput"
+              type="text"
+              autocomplete="name"
+              placeholder="Full name"
+            />
+          </div>
+          <div class="form-row">
+            <input
+              id="authEmailInput"
+              type="email"
+              autocomplete="email"
+              placeholder="Email"
+            />
+          </div>
+          <div class="form-row">
+            <input
+              id="authPasswordInput"
+              type="password"
+              autocomplete="current-password"
+              placeholder="Password"
+            />
+          </div>
+          <button id="authSubmitButton" class="btn-primary" type="submit">
+            Continue
+          </button>
+          <p id="authFeedback" class="sidebar-feedback"></p>
+        </form>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
