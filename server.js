@@ -62,6 +62,8 @@ const books = [
     id: 'b1',
     title: 'Introduction to Algorithms',
     author: 'Cormen, Leiserson, Rivest, Stein',
+    department: 'BE CSE',
+    section: 'Core Modules',
     availableCopies: 3,
     totalCopies: 5,
     reservedByUserIds: []
@@ -70,6 +72,8 @@ const books = [
     id: 'b2',
     title: 'Artificial Intelligence: A Modern Approach',
     author: 'Russell, Norvig',
+    department: 'BE CSE',
+    section: 'Electives',
     availableCopies: 1,
     totalCopies: 3,
     reservedByUserIds: []
@@ -78,6 +82,8 @@ const books = [
     id: 'b3',
     title: 'Deep Learning',
     author: 'Goodfellow, Bengio, Courville',
+    department: 'BE CSE',
+    section: 'Electives',
     availableCopies: 0,
     totalCopies: 2,
     reservedByUserIds: []
@@ -86,8 +92,70 @@ const books = [
     id: 'b4',
     title: 'Clean Code',
     author: 'Robert C. Martin',
+    department: 'BE CSE',
+    section: 'Foundation',
     availableCopies: 4,
     totalCopies: 4,
+    reservedByUserIds: []
+  },
+  {
+    id: 'b5',
+    title: 'Pharmacy Practice and The Law',
+    author: 'Richard R. Abood',
+    department: 'B Pharmacy',
+    section: 'Law & Ethics',
+    availableCopies: 5,
+    totalCopies: 8,
+    reservedByUserIds: []
+  },
+  {
+    id: 'b6',
+    title: 'Pharmacology',
+    author: 'Lippincott Williams & Wilkins',
+    department: 'B Pharmacy',
+    section: 'Core Subjects',
+    availableCopies: 2,
+    totalCopies: 4,
+    reservedByUserIds: []
+  },
+  {
+    id: 'b7',
+    title: 'Data Structures and Algorithms in Java',
+    author: 'Michael T. Goodrich, Roberto Tamassia',
+    department: 'BCA',
+    section: 'Programming',
+    availableCopies: 6,
+    totalCopies: 6,
+    reservedByUserIds: []
+  },
+  {
+    id: 'b8',
+    title: 'Operating System Concepts',
+    author: 'Abraham Silberschatz',
+    department: 'BCA',
+    section: 'Systems',
+    availableCopies: 1,
+    totalCopies: 5,
+    reservedByUserIds: []
+  },
+  {
+    id: 'b9',
+    title: 'Fundamentals of Nursing',
+    author: 'Patricia A. Potter',
+    department: 'Nursing',
+    section: 'First Year',
+    availableCopies: 4,
+    totalCopies: 7,
+    reservedByUserIds: []
+  },
+  {
+    id: 'b10',
+    title: 'Medical-Surgical Nursing',
+    author: 'Sharon L. Lewis',
+    department: 'Nursing',
+    section: 'Second Year',
+    availableCopies: 3,
+    totalCopies: 6,
     reservedByUserIds: []
   }
 ];
@@ -311,14 +379,28 @@ app.post('/api/auth/login', async (req, res) => {
     }
   }
 
-  const user = users.find((u) => u.email === normalizedEmail);
+  let user = users.find((u) => u.email === normalizedEmail);
   if (!user) {
-    return res.status(401).json({ message: 'Invalid credentials.' });
-  }
+    const passwordHash = await bcrypt.hash(String(password), 8);
+    const name = String(email).split('@')[0];
+    user = {
+      id: uuidv4(),
+      name: name,
+      email: normalizedEmail,
+      passwordHash
+    };
+    users.push(user);
 
-  const ok = await bcrypt.compare(String(password), user.passwordHash);
-  if (!ok) {
-    return res.status(401).json({ message: 'Invalid email or password.' });
+    sendSimulatedEmail(
+      user.email,
+      'Welcome to Library Insights Hub!',
+      `Hi ${user.name},\n\nThanks for signing up. You can now book seats and reserve books from the dashboard.\n\nHappy studying!`
+    );
+  } else {
+    const ok = await bcrypt.compare(String(password), user.passwordHash);
+    if (!ok) {
+      return res.status(401).json({ message: 'Invalid email or password.' });
+    }
   }
 
   const sessionId = uuidv4();
@@ -596,7 +678,9 @@ app.get('/api/books', (req, res) => {
     result = books.filter(
       (b) =>
         b.title.toLowerCase().includes(query) ||
-        b.author.toLowerCase().includes(query)
+        b.author.toLowerCase().includes(query) ||
+        b.department.toLowerCase().includes(query) ||
+        b.section.toLowerCase().includes(query)
     );
   }
 
@@ -605,6 +689,8 @@ app.get('/api/books', (req, res) => {
       id: b.id,
       title: b.title,
       author: b.author,
+      department: b.department,
+      section: b.section,
       availableCopies: b.availableCopies,
       totalCopies: b.totalCopies,
       isReservable: b.availableCopies > 0,

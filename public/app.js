@@ -725,49 +725,91 @@ async function runBookSearch() {
       return;
     }
 
-    list.forEach((book) => {
-      const card = document.createElement('div');
-      card.className = 'book-card';
-
-      const title = document.createElement('p');
-      title.className = 'book-title';
-      title.textContent = book.title;
-
-      const author = document.createElement('p');
-      author.className = 'book-author';
-      author.textContent = book.author;
-
-      const meta = document.createElement('div');
-      meta.className = 'book-meta';
-
-      const availability = document.createElement('span');
-      availability.innerHTML = `<strong>${book.availableCopies}</strong> of ${book.totalCopies} available`;
-
-      const reserveBtn = document.createElement('button');
-      reserveBtn.className = 'btn-ghost-small';
+    // Group books by department, then by section
+    const groupedBooks = list.reduce((acc, book) => {
+      const dept = book.department || 'Other';
+      const sec = book.section || 'General';
       
-      const alreadyReservedByMe = currentUser && book.reservedByUserIds && book.reservedByUserIds.includes(currentUser.id);
+      if (!acc[dept]) acc[dept] = {};
+      if (!acc[dept][sec]) acc[dept][sec] = [];
+      
+      acc[dept][sec].push(book);
+      return acc;
+    }, {});
 
-      if (alreadyReservedByMe) {
-        reserveBtn.textContent = 'Reserved';
-        reserveBtn.disabled = true;
-        reserveBtn.classList.add('btn-ghost-small--success');
-      } else if (!book.isReservable) {
-        reserveBtn.textContent = 'Out of Stock';
-        reserveBtn.disabled = true;
-      } else {
-        reserveBtn.textContent = 'Reserve';
-        reserveBtn.addEventListener('click', () => reserveBook(book.id, reserveBtn, availability));
-      }
+    Object.keys(groupedBooks).forEach((department) => {
+      // Create Department Section
+      const deptSection = document.createElement('div');
+      deptSection.className = 'department-section';
 
-      meta.appendChild(availability);
-      meta.appendChild(reserveBtn);
+      const deptHeader = document.createElement('h3');
+      deptHeader.className = 'department-header';
+      deptHeader.textContent = department;
+      deptSection.appendChild(deptHeader);
 
-      card.appendChild(title);
-      card.appendChild(author);
-      card.appendChild(meta);
+      // Iterate over Sections within the Department
+      Object.keys(groupedBooks[department]).forEach((sectionName) => {
+        const secContainer = document.createElement('div');
+        secContainer.className = 'course-section';
 
-      bookResultsEl.appendChild(card);
+        const secHeader = document.createElement('h4');
+        secHeader.className = 'course-section-header';
+        secHeader.textContent = sectionName;
+        secContainer.appendChild(secHeader);
+
+        const deptCardsGrid = document.createElement('div');
+        deptCardsGrid.className = 'department-cards-grid';
+
+        groupedBooks[department][sectionName].forEach((book) => {
+          const card = document.createElement('div');
+          card.className = 'book-card';
+
+          const title = document.createElement('p');
+          title.className = 'book-title';
+          title.textContent = book.title;
+
+          const author = document.createElement('p');
+          author.className = 'book-author';
+          author.textContent = book.author;
+
+          const meta = document.createElement('div');
+          meta.className = 'book-meta';
+
+          const availability = document.createElement('span');
+          availability.innerHTML = `<strong>${book.availableCopies}</strong> of ${book.totalCopies} available`;
+
+          const reserveBtn = document.createElement('button');
+          reserveBtn.className = 'btn-ghost-small';
+          
+          const alreadyReservedByMe = currentUser && book.reservedByUserIds && book.reservedByUserIds.includes(currentUser.id);
+
+          if (alreadyReservedByMe) {
+            reserveBtn.textContent = 'Reserved';
+            reserveBtn.disabled = true;
+            reserveBtn.classList.add('btn-ghost-small--success');
+          } else if (!book.isReservable) {
+            reserveBtn.textContent = 'Out of Stock';
+            reserveBtn.disabled = true;
+          } else {
+            reserveBtn.textContent = 'Reserve';
+            reserveBtn.addEventListener('click', () => reserveBook(book.id, reserveBtn, availability));
+          }
+
+          meta.appendChild(availability);
+          meta.appendChild(reserveBtn);
+
+          card.appendChild(title);
+          card.appendChild(author);
+          card.appendChild(meta);
+
+          deptCardsGrid.appendChild(card);
+        });
+
+        secContainer.appendChild(deptCardsGrid);
+        deptSection.appendChild(secContainer);
+      });
+
+      bookResultsEl.appendChild(deptSection);
     });
   } catch {
     const errorEl = document.createElement('div');
