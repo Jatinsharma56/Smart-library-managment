@@ -44,41 +44,7 @@ https://smart-library-managment.vercel.app
 * GitHub
 * Vercel (Deployment)
 
----
 
-## ⚙️ Installation & Setup
-
-### 1️⃣ Clone the Repository
-
-```bash
-git clone https://github.com/Jatinsharma56/Smart-library-managment.git
-```
-
-### 2️⃣ Navigate to the Project Folder
-
-```bash
-cd Smart-library-managment
-```
-
-### 3️⃣ Install Dependencies
-
-```bash
-npm install
-```
-
-### 4️⃣ Run the Application
-
-```bash
-npm start
-```
-
-### 5️⃣ Open in Browser
-
-```
-http://localhost:3000
-```
-
----
 
 ## 🚀 Deployment
 
