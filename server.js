@@ -352,11 +352,21 @@ function generateCrowdForecast(currentRatio) {
 
 function findUserBySession(req) {
   const sessionId = req.header('x-session-id');
-  if (!sessionId) return null;
-  const session = sessions.get(sessionId);
-  if (!session) return null;
-  const user = users.find((u) => u.id === session.userId);
-  return user || null;
+  if (sessionId) {
+    const session = sessions.get(sessionId);
+    if (session) {
+      const user = users.find((u) => u.id === session.userId);
+      if (user) return user;
+    }
+  }
+
+  // Not logged in via session, check for guest ID
+  const guestId = req.header('x-guest-id');
+  if (guestId) {
+    return { id: `guest_${guestId}`, name: 'Guest User', email: 'guest@library.com' };
+  }
+
+  return null;
 }
 
 // -------- Auth endpoints (demo) --------
@@ -514,7 +524,7 @@ app.get('/api/seats/map', (req, res) => {
 app.post('/api/seats/bookSeat', (req, res) => {
   let user = findUserBySession(req);
   if (!user) {
-    user = { id: 'guest_user', name: 'Guest User', email: 'guest@library.com' };
+    user = { id: 'guest_fallback', name: 'Guest User', email: 'guest@library.com' };
   }
 
   const { zoneId, seatNumber, slot } = req.body || {};
@@ -547,10 +557,8 @@ app.post('/api/seats/bookSeat', (req, res) => {
     }
   }
 
-  if (user.id !== 'guest_user') {
-    if (userBookingCount >= 2) {
-      return res.status(409).json({ message: 'You can only book up to 2 seats per time slot across all library zones.' });
-    }
+  if (userBookingCount >= 2) {
+    return res.status(409).json({ message: 'You can only book up to 2 seats per time slot across all library zones.' });
   }
 
   seat.bookings.push({
@@ -575,7 +583,32 @@ app.post('/api/seats/bookSeat', (req, res) => {
 });
 
 app.post('/api/seats/releaseSeat', (req, res) => {
-  return res.status(403).json({ message: 'Only administrators can modify bookings.' });
+  const user = findUserBySession(req);
+  if (!user) {
+    return res.status(401).json({ message: 'Unauthorized.' });
+  }
+
+  const { zoneId, seatNumber, slot } = req.body || {};
+  const zone = ZONES.find((z) => z.id === zoneId);
+  if (!zone) return res.status(400).json({ message: 'Invalid zone.' });
+
+  const seats = ensureSeatMap(zone.id);
+  const seat = seats.find((s) => s.seatNumber === Number(seatNumber));
+  if (!seat) return res.status(400).json({ message: 'Invalid seat number.' });
+
+  const bookingIndex = seat.bookings.findIndex(b => (!slot || b.slot === slot) && b.userId === user.id);
+  if (bookingIndex === -1) {
+    return res.status(404).json({ message: 'No booking found for this seat that belongs to you.' });
+  }
+
+  // Remove the booking
+  seat.bookings.splice(bookingIndex, 1);
+
+  const payload = buildSeatMapResponse(zone.id, user, slot);
+  res.status(200).json({
+    message: `Seat ${seat.seatNumber} released.`,
+    seatMap: payload
+  });
 });
 
 app.post('/api/seats/adminRelease', (req, res) => {
@@ -916,22 +949,27 @@ app.get('/api/admin/fines', (req, res) => {
     if (now > due) {
       const diffTime = Math.abs(now - due);
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      const amount = diffDays * 1; // $1 per day fine
+      const grossFine = diffDays * 1; // $1 per day fine
       
-      const book = books.find(b => b.id === issue.bookId);
-      const u = users.find(x => x.id === issue.userId);
+      const paidFineAmount = fines.filter(f => f.issueId === issue.id && f.status === 'paid').reduce((sum, f) => sum + f.amount, 0);
+      const amount = Math.max(0, grossFine - paidFineAmount);
+      
+      if (amount > 0) {
+        const book = books.find(b => b.id === issue.bookId);
+        const u = users.find(x => x.id === issue.userId);
 
-      currentOverdue.push({
-        issueId: issue.id,
-        userId: issue.userId,
-        bookId: issue.bookId,
-        bookTitle: book ? book.title : 'Unknown Book',
-        userName: u ? u.name : 'Unknown User',
-        userEmail: u ? u.email : '',
-        dueDate: issue.dueDate,
-        overdueDays: diffDays,
-        calculatedFine: amount
-      });
+        currentOverdue.push({
+          issueId: issue.id,
+          userId: issue.userId,
+          bookId: issue.bookId,
+          bookTitle: book ? book.title : 'Unknown Book',
+          userName: u ? u.name : 'Unknown User',
+          userEmail: u ? u.email : '',
+          dueDate: issue.dueDate,
+          overdueDays: diffDays,
+          calculatedFine: amount
+        });
+      }
     }
   });
 
