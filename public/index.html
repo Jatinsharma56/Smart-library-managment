@@ -14,8 +14,40 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body>
-    <div class="page">
-      <header class="top-bar">
+    <div class="app-container">
+      <aside class="sidebar-nav">
+        <div class="sidebar-header">
+          <div class="sidebar-logo">L</div>
+          <div class="sidebar-brand">
+            <h2>Library Hub</h2>
+          </div>
+        </div>
+        <ul class="nav-links">
+          <li>
+            <a href="index.html" class="nav-item active">
+              <span style="margin-right:8px;">📊</span> Dashboard
+            </a>
+          </li>
+          <li>
+            <a href="book-issue.html" class="nav-item">
+              <span style="margin-right:8px;">📚</span> Books
+            </a>
+          </li>
+          <li>
+            <a href="seat-booking.html" class="nav-item">
+              <span style="margin-right:8px;">🪑</span> Seats
+            </a>
+          </li>
+          <li>
+            <a href="admin.html" class="nav-item">
+              <span style="margin-right:8px;">⚙️</span> Admin
+            </a>
+          </li>
+        </ul>
+      </aside>
+      <main class="main-content">
+        <div class="page">
+          <header class="top-bar">
         <div class="top-bar-left">
           <div class="logo-circle">L</div>
           <div class="brand">
@@ -58,9 +90,14 @@
             <p class="summary-sub">Search & reserve books</p>
           </a>
           <a href="admin.html" class="summary-card" style="text-decoration: none; display: flex; flex-direction: column; align-items: center; padding: 40px 20px; transition: transform 0.2s; cursor: pointer;">
-            <p class="summary-value highlight" style="font-size: 4rem; margin-bottom: 16px;">⚙️</p>
+            <p class="summary-value highlight" style="font-size: 4rem; margin-bottom: 16px;">🛡️</p>
             <h3 style="font-size: 1.5rem; color: var(--text-main); margin-bottom: 8px;">Admin Dashboard</h3>
             <p class="summary-sub">Manage library operations</p>
+          </a>
+          <a href="fine-management.html" class="summary-card" style="text-decoration: none; display: flex; flex-direction: column; align-items: center; padding: 40px 20px; transition: transform 0.2s; cursor: pointer;">
+            <p class="summary-value highlight" style="font-size: 4rem; margin-bottom: 16px;">💸</p>
+            <h3 style="font-size: 1.5rem; color: var(--text-main); margin-bottom: 8px;">Fine Management</h3>
+            <p class="summary-sub">Track overdue penalties</p>
           </a>
         </div>
       </main>
@@ -75,6 +112,7 @@
           seconds.
         </span>
       </footer>
+</main>
     </div>
 
     <div id="authDialogBackdrop" class="auth-backdrop auth-backdrop--hidden">

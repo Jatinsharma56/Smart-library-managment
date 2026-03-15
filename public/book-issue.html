@@ -14,8 +14,40 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body>
-    <div class="page">
-      <header class="top-bar">
+    <div class="app-container">
+      <aside class="sidebar-nav">
+        <div class="sidebar-header">
+          <div class="sidebar-logo">L</div>
+          <div class="sidebar-brand">
+            <h2>Library Hub</h2>
+          </div>
+        </div>
+        <ul class="nav-links">
+          <li>
+            <a href="index.html" class="nav-item">
+              <span style="margin-right:8px;">📊</span> Dashboard
+            </a>
+          </li>
+          <li>
+            <a href="book-issue.html" class="nav-item active">
+              <span style="margin-right:8px;">📚</span> Books
+            </a>
+          </li>
+          <li>
+            <a href="seat-booking.html" class="nav-item">
+              <span style="margin-right:8px;">🪑</span> Seats
+            </a>
+          </li>
+          <li>
+            <a href="admin.html" class="nav-item">
+              <span style="margin-right:8px;">⚙️</span> Admin
+            </a>
+          </li>
+        </ul>
+      </aside>
+      <main class="main-content">
+        <div class="page">
+          <header class="top-bar">
         <div class="top-bar-left">
           <div class="logo-circle">L</div>
           <div class="brand">
@@ -56,7 +88,7 @@
                 🔍 Search Books
               </button>
             </div>
-            <div id="bookResults" class="book-results" style="display: grid; gap: 16px;"></div>
+            <div id="bookResults" style="display: flex; flex-direction: column; gap: 32px; margin-top: 10px;"></div>
           </div>
         </section>
       </main>

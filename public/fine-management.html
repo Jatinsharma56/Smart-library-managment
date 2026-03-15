@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Fine Management - Library Insights Hub</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+    <div class="app-container">
+        <!-- Reusing sidebar-nav style from other pages -->
+        <aside class="sidebar-nav">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">L</div>
+                <div class="sidebar-brand">
+                    <h2>Library Hub</h2>
+                </div>
+            </div>
+            <ul class="nav-links">
+                <li><a href="index.html" class="nav-item"><span style="margin-right:8px;">📊</span> Dashboard</a></li>
+                <li><a href="book-issue.html" class="nav-item"><span style="margin-right:8px;">📚</span> Books</a></li>
+                <li><a href="seat-booking.html" class="nav-item"><span style="margin-right:8px;">🪑</span> Seats</a></li>
+                <li><a href="admin.html" class="nav-item"><span style="margin-right:8px;">🛡️</span> Admin</a></li>
+                <li><a href="fine-management.html" class="nav-item active"><span style="margin-right:8px;">💸</span> Fines</a></li>
+            </ul>
+        </aside>
+        <main class="main-content">
+            <div class="page">
+                <header class="top-bar">
+                    <div class="top-bar-left">
+                        <div class="logo-circle">💸</div>
+                        <div class="brand">
+                            <h1>Fine Management</h1>
+                            <p>Track due dates and manage student penalties</p>
+                        </div>
+                    </div>
+                    <div class="top-bar-right">
+                        <a href="index.html" class="btn-ghost-small">Back to Dashboard</a>
+                    </div>
+                </header>
+                
+                <div id="loginSection" class="card" style="max-width: 400px; margin: 40px auto; text-align: center;">
+                    <h2>Admin Access Required</h2>
+                    <p style="margin-bottom: 20px; color: var(--text-soft);">You must log in to view and manage fines.</p>
+                    <div style="margin-bottom: 15px;">
+                        <input type="email" id="emailInput" class="form-input" value="admin@library.com" />
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <input type="password" id="passwordInput" class="form-input" value="admin123" />
+                    </div>
+                    <button id="loginBtn" class="btn-primary" style="width: 100%;">Login to Fines Dashboard</button>
+                    <p id="errorMsg" style="color: #ef4444; font-size: 0.85rem; margin-top: 10px;"></p>
+                </div>
+
+                <div id="finesDashboardSection" style="display: none; padding: 20px;">
+                    <div class="admin-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h2>Fine Tracking Dashboard</h2>
+                        <button id="logoutBtn" class="btn-secondary">Logout</button>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
+                        <div class="card" style="padding: 20px; text-align: center; background: #fff1f2; border: 1px solid #ffe4e6;">
+                            <h3 style="color: #be123c; margin-bottom: 10px; font-size: 1rem;">Total Pending Penalties</h3>
+                            <p id="totalPendingStat" style="font-size: 2.5rem; font-weight: 700; color: #9f1239;">$0.00</p>
+                        </div>
+                        <div class="card" style="padding: 20px; text-align: center; background: #f0fdf4; border: 1px solid #dcfce7;">
+                            <h3 style="color: #15803d; margin-bottom: 10px; font-size: 1rem;">Total Fines Collected</h3>
+                            <p id="totalCollectedStat" style="font-size: 2.5rem; font-weight: 700; color: #166534;">$0.00</p>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; gap: 30px;">
+                        <!-- Overdue Books List -->
+                        <div class="card">
+                            <h2 style="display: flex; align-items: center; gap: 10px;"><span style="font-size: 1.5rem">⚠️</span> Overdue Books & Penalties</h2>
+                            <p style="color: var(--text-soft); font-size: 0.9rem; margin-bottom: 15px;">Calculated dynamically based on currently issued books that have passed their due date.</p>
+                            <div class="table-container">
+                                <table id="overdueTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Student</th>
+                                            <th>Book Title</th>
+                                            <th>Due Date</th>
+                                            <th>Overdue (Days)</th>
+                                            <th>Calculated Fine</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Dynamic rows -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Paid / Tracked Fines -->
+                        <div class="card">
+                            <h2 style="display: flex; align-items: center; gap: 10px;"><span style="font-size: 1.5rem">✅</span> Paid / Resolved Fines</h2>
+                            <p style="color: var(--text-soft); font-size: 0.9rem; margin-bottom: 15px;">Log of previously recorded fines.</p>
+                            <div class="table-container">
+                                <table id="recordedFinesTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Student</th>
+                                            <th>Book Title</th>
+                                            <th>Amount</th>
+                                            <th>Status</th>
+                                            <th>Resolved Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Dynamic rows -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+    <script src="fines.js"></script>
+</body>
+</html>

@@ -747,68 +747,74 @@ async function runBookSearch() {
       deptHeader.textContent = department;
       deptSection.appendChild(deptHeader);
 
+      const tableContainer = document.createElement('div');
+      tableContainer.className = 'table-container';
+      
+      const table = document.createElement('table');
+      table.innerHTML = `
+        <thead>
+          <tr>
+            <th>Book Details</th>
+            <th>Section</th>
+            <th>Availability</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      `;
+      const tbody = table.querySelector('tbody');
+
       // Iterate over Sections within the Department
       Object.keys(groupedBooks[department]).forEach((sectionName) => {
-        const secContainer = document.createElement('div');
-        secContainer.className = 'course-section';
-
-        const secHeader = document.createElement('h4');
-        secHeader.className = 'course-section-header';
-        secHeader.textContent = sectionName;
-        secContainer.appendChild(secHeader);
-
-        const deptCardsGrid = document.createElement('div');
-        deptCardsGrid.className = 'department-cards-grid';
-
         groupedBooks[department][sectionName].forEach((book) => {
-          const card = document.createElement('div');
-          card.className = 'book-card';
+          const tr = document.createElement('tr');
 
-          const title = document.createElement('p');
-          title.className = 'book-title';
-          title.textContent = book.title;
+          const detailsTd = document.createElement('td');
+          detailsTd.innerHTML = `<strong>${book.title}</strong><br/><small style="color:var(--text-soft)">${book.author}</small>`;
 
-          const author = document.createElement('p');
-          author.className = 'book-author';
-          author.textContent = book.author;
+          const sectionTd = document.createElement('td');
+          sectionTd.textContent = sectionName;
 
-          const meta = document.createElement('div');
-          meta.className = 'book-meta';
+          const availabilityTd = document.createElement('td');
+          availabilityTd.innerHTML = `<strong>${book.availableCopies}</strong> of ${book.totalCopies}`;
 
-          const availability = document.createElement('span');
-          availability.innerHTML = `<strong>${book.availableCopies}</strong> of ${book.totalCopies} available`;
-
+          const actionTd = document.createElement('td');
+          
           const reserveBtn = document.createElement('button');
-          reserveBtn.className = 'btn-ghost-small';
           
           const alreadyReservedByMe = currentUser && book.reservedByUserIds && book.reservedByUserIds.includes(currentUser.id);
 
           if (alreadyReservedByMe) {
             reserveBtn.textContent = 'Reserved';
             reserveBtn.disabled = true;
-            reserveBtn.classList.add('btn-ghost-small--success');
+            reserveBtn.className = 'badge success';
+            reserveBtn.style.border = 'none';
           } else if (!book.isReservable) {
             reserveBtn.textContent = 'Out of Stock';
             reserveBtn.disabled = true;
+            reserveBtn.className = 'badge danger';
+            reserveBtn.style.border = 'none';
           } else {
             reserveBtn.textContent = 'Reserve';
-            reserveBtn.addEventListener('click', () => reserveBook(book.id, reserveBtn, availability));
+            reserveBtn.className = 'btn-primary';
+            reserveBtn.style.padding = '4px 12px';
+            reserveBtn.style.fontSize = '0.75rem';
+            reserveBtn.addEventListener('click', () => reserveBook(book.id, reserveBtn, availabilityTd));
           }
 
-          meta.appendChild(availability);
-          meta.appendChild(reserveBtn);
+          actionTd.appendChild(reserveBtn);
 
-          card.appendChild(title);
-          card.appendChild(author);
-          card.appendChild(meta);
+          tr.appendChild(detailsTd);
+          tr.appendChild(sectionTd);
+          tr.appendChild(availabilityTd);
+          tr.appendChild(actionTd);
 
-          deptCardsGrid.appendChild(card);
+          tbody.appendChild(tr);
         });
-
-        secContainer.appendChild(deptCardsGrid);
-        deptSection.appendChild(secContainer);
       });
 
+      tableContainer.appendChild(table);
+      deptSection.appendChild(tableContainer);
       bookResultsEl.appendChild(deptSection);
     });
   } catch {
@@ -846,18 +852,21 @@ async function reserveBook(bookId, buttonEl, availabilityEl) {
 
     // Update the local availability DOM to reflect the new copies
     if (data.book && availabilityEl) {
-      availabilityEl.innerHTML = `<strong>${data.book.availableCopies}</strong> of ${data.book.totalCopies} available`;
+      availabilityEl.innerHTML = `<strong>${data.book.availableCopies}</strong> of ${data.book.totalCopies}`;
       
       if (data.book.availableCopies === 0) {
         buttonEl.textContent = 'Out of Stock';
-        buttonEl.classList.remove('btn-ghost-small--success');
+        buttonEl.className = 'badge danger';
+        buttonEl.style.border = 'none';
       } else {
         buttonEl.textContent = 'Reserved';
-        buttonEl.classList.add('btn-ghost-small--success');
+        buttonEl.className = 'badge success';
+        buttonEl.style.border = 'none';
       }
     } else {
       buttonEl.textContent = 'Reserved';
-      buttonEl.classList.add('btn-ghost-small--success');
+      buttonEl.className = 'badge success';
+      buttonEl.style.border = 'none';
     }
   } catch {
     buttonEl.textContent = 'Error';

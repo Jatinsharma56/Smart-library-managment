@@ -24,9 +24,45 @@ function sendSimulatedEmail(to, subject, body) {
   console.log('======================================================\n');
 }
 
+// Global Library Settings
+const librarySettings = {
+  // Library Settings
+  branchSelector: 'All Branches',
+  maxBooksPerStudent: 2,
+  seatBookingTimeLimit: 120, // in minutes
+  
+  // Notification Settings
+  emailAlerts: true,
+  dueDateReminders: true,
+  newBookAlerts: false
+};
+
 // In-memory data stores (demo only, resets on restart)
-const users = [];
+const users = [
+  { id: 'u3', name: 'John Doe', email: 'john@library.com', password: '123' } // Dummy user for fines
+];
 const sessions = new Map(); // sessionId -> { userId, createdAt }
+
+const activeIssues = [
+  {
+    id: 'i1',
+    bookId: 'b1',
+    userId: 'u3',
+    issuedDate: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(), 
+    dueDate: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString()
+  }
+];
+
+const fines = [
+  {
+    id: 'f1',
+    userId: 'u3',
+    bookId: 'b1',
+    amount: 5,
+    status: 'pending',
+    date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
+  }
+];
 
 const SEATS_PER_ZONE = 50;
 
@@ -64,9 +100,10 @@ const books = [
     author: 'Cormen, Leiserson, Rivest, Stein',
     department: 'BE CSE',
     section: 'Core Modules',
-    availableCopies: 3,
+    availableCopies: 2,
     totalCopies: 5,
-    reservedByUserIds: []
+    reservedByUserIds: [],
+    issuedByUserIds: ['u3']
   },
   {
     id: 'b2',
@@ -76,7 +113,8 @@ const books = [
     section: 'Electives',
     availableCopies: 1,
     totalCopies: 3,
-    reservedByUserIds: []
+    reservedByUserIds: [],
+    issuedByUserIds: []
   },
   {
     id: 'b3',
@@ -86,7 +124,8 @@ const books = [
     section: 'Electives',
     availableCopies: 0,
     totalCopies: 2,
-    reservedByUserIds: []
+    reservedByUserIds: [],
+    issuedByUserIds: []
   },
   {
     id: 'b4',
@@ -96,7 +135,8 @@ const books = [
     section: 'Foundation',
     availableCopies: 4,
     totalCopies: 4,
-    reservedByUserIds: []
+    reservedByUserIds: [],
+    issuedByUserIds: []
   },
   {
     id: 'b5',
@@ -106,7 +146,8 @@ const books = [
     section: 'Law & Ethics',
     availableCopies: 5,
     totalCopies: 8,
-    reservedByUserIds: []
+    reservedByUserIds: [],
+    issuedByUserIds: []
   },
   {
     id: 'b6',
@@ -116,7 +157,8 @@ const books = [
     section: 'Core Subjects',
     availableCopies: 2,
     totalCopies: 4,
-    reservedByUserIds: []
+    reservedByUserIds: [],
+    issuedByUserIds: []
   },
   {
     id: 'b7',
@@ -126,7 +168,8 @@ const books = [
     section: 'Programming',
     availableCopies: 6,
     totalCopies: 6,
-    reservedByUserIds: []
+    reservedByUserIds: [],
+    issuedByUserIds: []
   },
   {
     id: 'b8',
@@ -136,7 +179,8 @@ const books = [
     section: 'Systems',
     availableCopies: 1,
     totalCopies: 5,
-    reservedByUserIds: []
+    reservedByUserIds: [],
+    issuedByUserIds: []
   },
   {
     id: 'b9',
@@ -146,7 +190,8 @@ const books = [
     section: 'First Year',
     availableCopies: 4,
     totalCopies: 7,
-    reservedByUserIds: []
+    reservedByUserIds: [],
+    issuedByUserIds: []
   },
   {
     id: 'b10',
@@ -156,7 +201,8 @@ const books = [
     section: 'Second Year',
     availableCopies: 3,
     totalCopies: 6,
-    reservedByUserIds: []
+    reservedByUserIds: [],
+    issuedByUserIds: []
   }
 ];
 
@@ -556,13 +602,20 @@ app.post('/api/seats/adminRelease', (req, res) => {
     seatMap: payload
   });
 });
-
 app.post('/api/seats/checkIn', (req, res) => {
   const user = findUserBySession(req);
-  // Ensure the user checking in is an admin
-  if (!user || !user.isAdmin) return res.status(403).json({ message: 'Only administrators can check users in.' });
+  if (!user) {
+    return res.status(401).json({ message: 'Unauthorized. Please log in.' });
+  }
 
   const { zoneId, seatNumber, slot, userId } = req.body || {};
+  if (!zoneId || !seatNumber || !slot) {
+    return res.status(400).json({ message: 'Missing check-in data.' });
+  }
+
+  const targetUser = (user.isAdmin && userId) ? users.find(u => u.id === userId) : user;
+  if (!targetUser) return res.status(404).json({ message: 'User not found.' });
+
   const zone = ZONES.find((z) => z.id === zoneId);
   if (!zone) return res.status(400).json({ message: 'Invalid zone.' });
 
@@ -570,8 +623,7 @@ app.post('/api/seats/checkIn', (req, res) => {
   const seat = seats.find((s) => s.seatNumber === Number(seatNumber));
   if (!seat) return res.status(400).json({ message: 'Invalid seat number.' });
 
-  // Use the provided userId to find the booking, as the admin is making the request
-  const booking = seat.bookings.find(b => (!slot || b.slot === slot));
+  const booking = seat.bookings.find(b => b.slot === slot && b.userId === targetUser.id);
   if (!booking) {
     return res.status(404).json({ message: 'Booking not found.' });
   }
@@ -592,27 +644,36 @@ app.post('/api/seats/checkIn', (req, res) => {
 // Auto-expiry job: Run every minute
 const EXPIRY_MS = 20 * 60 * 1000; // 20 minutes
 setInterval(() => {
-  const now = Date.now();
+  const now = new Date();
   for (const zone of ZONES) {
     const seats = zoneSeatMaps.get(zone.id) || [];
     for (const seat of seats) {
       // iterate backwards since we may remove elements
       for (let i = seat.bookings.length - 1; i >= 0; i--) {
         const booking = seat.bookings[i];
-        if (!booking.isCheckedIn && booking.bookedAt) {
-          if (now - booking.bookedAt > EXPIRY_MS) {
-            console.log(`Auto-expiring seat ${seat.seatNumber} in ${zone.name} slot ${booking.slot} for user ${booking.userId}`);
+        if (!booking.isCheckedIn && booking.slot) {
+          // Parse the slot start time (e.g., "09:00 - 11:00")
+          const startTimeStr = booking.slot.split(' - ')[0];
+          if (startTimeStr) {
+            const [hours, minutes] = startTimeStr.split(':').map(Number);
+            const slotStartTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0);
+            const timeSinceSlotStart = now.getTime() - slotStartTime.getTime();
             
-            const bookingUser = users.find(u => u.id === booking.userId);
-            if (bookingUser) {
-              sendSimulatedEmail(
-                bookingUser.email,
-                'Seat Reservation Expired',
-                `Hi ${bookingUser.name},\n\nWe noticed you didn't check in to Seat ${seat.seatNumber} in the ${zone.name} within 20 minutes.\n\nYour reservation for ${booking.slot} has been released so others can study.\n\nBest,\nLibrary Team`
-              );
-            }
+            // If the current time is 20+ mins AFTER the slot has started... auto-release
+            if (timeSinceSlotStart > EXPIRY_MS) {
+              console.log(`Auto-expiring seat ${seat.seatNumber} in ${zone.name} slot ${booking.slot} for user ${booking.userId}`);
+              
+              const bookingUser = users.find(u => u.id === booking.userId);
+              if (bookingUser) {
+                sendSimulatedEmail(
+                  bookingUser.email,
+                  'Seat Reservation Expired',
+                  `Hi ${bookingUser.name},\n\nWe noticed you didn't check in to Seat ${seat.seatNumber} in the ${zone.name} within 20 minutes.\n\nYour reservation for ${booking.slot} has been released so others can study.\n\nBest,\nLibrary Team`
+                );
+              }
 
-            seat.bookings.splice(i, 1);
+              seat.bookings.splice(i, 1);
+            }
           }
         }
       }
@@ -651,21 +712,272 @@ app.get('/api/admin/data', (req, res) => {
     }
   }
 
+  // Group books by department
+  const branches = {};
+  for (const b of books) {
+    if (!branches[b.department]) {
+      branches[b.department] = {
+        name: b.department,
+        reservedBooks: [],
+        issuedBooks: []
+      };
+    }
+
+    const branch = branches[b.department];
+
+    b.reservedByUserIds.forEach(userId => {
+      const u = users.find(x => x.id === userId);
+      branch.reservedBooks.push({
+        id: b.id,
+        title: b.title,
+        userId: userId,
+        userName: u ? u.name : 'Unknown User',
+        userEmail: u ? u.email : 'Unknown'
+      });
+    });
+
+    b.issuedByUserIds.forEach(userId => {
+      const u = users.find(x => x.id === userId);
+      branch.issuedBooks.push({
+        id: b.id,
+        title: b.title,
+        userId: userId,
+        userName: u ? u.name : 'Unknown User',
+        userEmail: u ? u.email : 'Unknown'
+      });
+    });
+  }
+
   res.json({
     users: users.map(u => ({ id: u.id, name: u.name, email: u.email, isAdmin: !!u.isAdmin })),
     SeatBookings: allSeatBookings,
-    reservedBooks: books.flatMap(b => 
-      b.reservedByUserIds.map(userId => {
-        const u = users.find((x) => x.id === userId);
-        return {
-          id: b.id,
-          title: b.title,
-          userName: u ? u.name : 'Unknown User',
-          userEmail: u ? u.email : 'Unknown'
-        };
-      })
-    )
+    branches: Object.values(branches),
+    userId: user.id
   });
+});
+
+app.get('/api/admin/settings', (req, res) => {
+  const user = findUserBySession(req);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ message: 'Forbidden. Admin access required.' });
+  }
+  res.json(librarySettings);
+});
+
+app.post('/api/admin/settings', (req, res) => {
+  const user = findUserBySession(req);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ message: 'Forbidden. Admin access required.' });
+  }
+
+  const { 
+    branchSelector, 
+    maxBooksPerStudent, 
+    seatBookingTimeLimit,
+    emailAlerts,
+    dueDateReminders,
+    newBookAlerts
+  } = req.body || {};
+
+  if (typeof branchSelector === 'string') librarySettings.branchSelector = branchSelector;
+  if (typeof maxBooksPerStudent === 'number') librarySettings.maxBooksPerStudent = maxBooksPerStudent;
+  if (typeof seatBookingTimeLimit === 'number') librarySettings.seatBookingTimeLimit = seatBookingTimeLimit;
+  if (typeof emailAlerts === 'boolean') librarySettings.emailAlerts = emailAlerts;
+  if (typeof dueDateReminders === 'boolean') librarySettings.dueDateReminders = dueDateReminders;
+  if (typeof newBookAlerts === 'boolean') librarySettings.newBookAlerts = newBookAlerts;
+
+  res.status(200).json({ message: 'Settings updated successfully.', settings: librarySettings });
+});
+
+app.put('/api/admin/profile', (req, res) => {
+  const user = findUserBySession(req);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ message: 'Forbidden. Admin access required.' });
+  }
+
+  const { name, email } = req.body || {};
+  
+  if (name && typeof name === 'string' && name.trim().length > 0) {
+    user.name = name.trim();
+  }
+  
+  // Update email if provided, and if it is not already taken
+  if (email && typeof email === 'string' && email.trim().length > 0) {
+    const existing = users.find(u => u.email === email.trim() && u.id !== user.id);
+    if (existing) {
+       return res.status(400).json({ message: 'Email is already in use by another account.' });
+    }
+    user.email = email.trim();
+  }
+
+  res.status(200).json({ message: 'Profile updated successfully.', user: { id: user.id, name: user.name, email: user.email, isAdmin: user.isAdmin } });
+});
+
+app.post('/api/admin/books/issue', (req, res) => {
+  const user = findUserBySession(req);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ message: 'Forbidden. Admin access required.' });
+  }
+
+  const { bookId, userId } = req.body || {};
+  const book = books.find(b => b.id === bookId);
+
+  if (!book) return res.status(404).json({ message: 'Book not found.' });
+
+  const reservedIndex = book.reservedByUserIds.indexOf(userId);
+  if (reservedIndex === -1) {
+    return res.status(400).json({ message: 'User has not reserved this book.' });
+  }
+
+  // Move from reserved to issued
+  book.reservedByUserIds.splice(reservedIndex, 1);
+  book.issuedByUserIds.push(userId);
+
+  // Send Email
+  const u = users.find(x => x.id === userId);
+  if (u) {
+    sendSimulatedEmail(
+      u.email,
+      'Book Issued',
+      `Hi ${u.name},\n\nYou have successfully picked up "${book.title}". Please return it within 14 days.\n\nHappy reading!`
+    );
+  }
+
+  // Track issue dates with 10 day dueDate
+  const issueRecord = {
+    id: Date.now().toString(),
+    bookId,
+    userId,
+    issuedDate: new Date().toISOString(),
+    dueDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+  };
+  activeIssues.push(issueRecord);
+
+  res.status(200).json({ message: 'Book successfully issued to user.' });
+});
+
+app.post('/api/admin/books/return', (req, res) => {
+  const user = findUserBySession(req);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ message: 'Forbidden. Admin access required.' });
+  }
+
+  const { bookId, userId } = req.body || {};
+  const book = books.find(b => b.id === bookId);
+
+  if (!book) return res.status(404).json({ message: 'Book not found.' });
+
+  const issuedIndex = book.issuedByUserIds.indexOf(userId);
+  if (issuedIndex === -1) {
+    return res.status(400).json({ message: 'User has not been issued this book.' });
+  }
+
+  // Remove from issued
+  book.issuedByUserIds.splice(issuedIndex, 1);
+  // Increment available copies
+  book.availableCopies += 1;
+
+  // Send Email
+  const u = users.find(x => x.id === userId);
+  if (u) {
+    sendSimulatedEmail(
+      u.email,
+      'Book Returned',
+      `Hi ${u.name},\n\nThank you for returning "${book.title}".\n\nHope you enjoyed it!`
+    );
+  }
+
+  // Remove from active issues
+  const issueIndex = activeIssues.findIndex(i => i.bookId === bookId && i.userId === userId);
+  if (issueIndex !== -1) {
+    activeIssues.splice(issueIndex, 1);
+  }
+
+  res.status(200).json({ message: 'Book successfully returned.' });
+});
+
+// -------- Fines Management --------
+
+app.get('/api/admin/fines', (req, res) => {
+  const user = findUserBySession(req);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ message: 'Forbidden. Admin access required.' });
+  }
+
+  const currentOverdue = [];
+  const now = new Date();
+  
+  activeIssues.forEach(issue => {
+    const due = new Date(issue.dueDate);
+    if (now > due) {
+      const diffTime = Math.abs(now - due);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const amount = diffDays * 1; // $1 per day fine
+      
+      const book = books.find(b => b.id === issue.bookId);
+      const u = users.find(x => x.id === issue.userId);
+
+      currentOverdue.push({
+        issueId: issue.id,
+        userId: issue.userId,
+        bookId: issue.bookId,
+        bookTitle: book ? book.title : 'Unknown Book',
+        userName: u ? u.name : 'Unknown User',
+        userEmail: u ? u.email : '',
+        dueDate: issue.dueDate,
+        overdueDays: diffDays,
+        calculatedFine: amount
+      });
+    }
+  });
+
+  const enrichedFines = fines.map(f => {
+    const book = books.find(b => b.id === f.bookId);
+    const u = users.find(x => x.id === f.userId);
+    return {
+      ...f,
+      bookTitle: book ? book.title : 'Unknown Book',
+      userName: u ? u.name : 'Unknown User',
+      userEmail: u ? u.email : ''
+    };
+  });
+
+  res.json({
+    overdueBooks: currentOverdue,
+    recordedFines: enrichedFines
+  });
+});
+
+app.post('/api/admin/fines/pay', (req, res) => {
+  const user = findUserBySession(req);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ message: 'Forbidden.' });
+  }
+
+  const { fineId, issueId, userId, bookId, amount } = req.body;
+
+  if (fineId) {
+    const fine = fines.find(f => f.id === fineId);
+    if (fine) {
+      fine.status = 'paid';
+      return res.json({ message: 'Fine marked as paid.' });
+    }
+    return res.status(404).json({ message: 'Fine not found.' });
+  } else if (issueId) {
+    // Paying a dynamic fine from an active issue
+    fines.push({
+      id: 'f_' + Date.now(),
+      issueId,
+      userId,
+      bookId,
+      amount,
+      status: 'paid',
+      date: new Date().toISOString()
+    });
+    return res.json({ message: 'Fine recorded and marked as paid.' });
+  }
+
+  res.status(400).json({ message: 'Invalid fine data.' });
 });
 
 // -------- Books & reservations --------
