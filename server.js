@@ -512,8 +512,10 @@ app.get('/api/seats/map', (req, res) => {
 });
 
 app.post('/api/seats/bookSeat', (req, res) => {
-  const user = findUserBySession(req);
-  if (!user) return res.status(401).json({ message: 'Sign in required to book seats.' });
+  let user = findUserBySession(req);
+  if (!user) {
+    user = { id: 'guest_user', name: 'Guest User', email: 'guest@library.com' };
+  }
 
   const { zoneId, seatNumber, slot } = req.body || {};
   if (!slot) return res.status(400).json({ message: 'Time slot is required.' });
@@ -545,8 +547,10 @@ app.post('/api/seats/bookSeat', (req, res) => {
     }
   }
 
-  if (userBookingCount >= 2) {
-    return res.status(409).json({ message: 'You can only book up to 2 seats per time slot across all library zones.' });
+  if (user.id !== 'guest_user') {
+    if (userBookingCount >= 2) {
+      return res.status(409).json({ message: 'You can only book up to 2 seats per time slot across all library zones.' });
+    }
   }
 
   seat.bookings.push({
@@ -603,9 +607,9 @@ app.post('/api/seats/adminRelease', (req, res) => {
   });
 });
 app.post('/api/seats/checkIn', (req, res) => {
-  const user = findUserBySession(req);
+  let user = findUserBySession(req);
   if (!user) {
-    return res.status(401).json({ message: 'Unauthorized. Please log in.' });
+    user = { id: 'guest_user', name: 'Guest User', email: 'guest@library.com' };
   }
 
   const { zoneId, seatNumber, slot, userId } = req.body || {};
@@ -1012,8 +1016,10 @@ app.get('/api/books', (req, res) => {
 });
 
 app.post('/api/books/:id/reserve', (req, res) => {
-  const user = findUserBySession(req);
-  if (!user) return res.status(401).json({ message: 'Sign in required to reserve books.' });
+  let user = findUserBySession(req);
+  if (!user) {
+    user = { id: 'guest_user', name: 'Guest User', email: 'guest@library.com' };
+  }
 
   const book = books.find((b) => b.id === req.params.id);
   if (!book) return res.status(404).json({ message: 'Book not found.' });
@@ -1023,7 +1029,7 @@ app.post('/api/books/:id/reserve', (req, res) => {
   }
 
   // Ensure a single user cannot reserve two copies of the same book
-  if (book.reservedByUserIds.includes(user.id)) {
+  if (user.id !== 'guest_user' && book.reservedByUserIds.includes(user.id)) {
     return res.status(409).json({ message: 'You have already reserved a copy of this book.' });
   }
 

@@ -525,11 +525,7 @@ async function loadSeatMap(zoneId, slot) {
   );
 
   if (!currentUser || !sessionId) {
-    if (seatMapGridEl) {
-      seatMapGridEl.innerHTML =
-        '<div class="sidebar-feedback sidebar-feedback--error">Login to view and book seats.</div>';
-    }
-    return;
+    // Proceed without warning, anonymous booking is supported
   }
 
   try {
@@ -540,7 +536,7 @@ async function loadSeatMap(zoneId, slot) {
     
     const res = await fetch(url, {
       headers: {
-        'x-session-id': sessionId
+        'x-session-id': sessionId || ''
       }
     });
 
@@ -631,10 +627,8 @@ function renderSeatMap() {
 }
 
 async function handleSeatClick(seat) {
-  if (!currentUser || !sessionId) {
-    openAuthDialog('login');
-    return;
-  }
+  // Allow anonymous booking
+
 
   seatBookMessageEl.textContent = '';
   seatBookMessageEl.classList.remove(
@@ -657,7 +651,7 @@ async function handleSeatClick(seat) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-session-id': sessionId
+        'x-session-id': sessionId || ''
       },
       body: JSON.stringify({ 
         zoneId, 
@@ -826,10 +820,8 @@ async function runBookSearch() {
 }
 
 async function reserveBook(bookId, buttonEl, availabilityEl) {
-  if (!currentUser || !sessionId) {
-    buttonEl.textContent = 'Login required';
-    return;
-  }
+  // Allow anonymous reservation
+
 
   buttonEl.disabled = true;
   buttonEl.textContent = 'Reserving…';
@@ -839,7 +831,7 @@ async function reserveBook(bookId, buttonEl, availabilityEl) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-session-id': sessionId
+        'x-session-id': sessionId || ''
       }
     });
 
@@ -951,7 +943,16 @@ function bootstrapApp() {
 }
 
 (async function init() {
-  await checkCurrentUser();
+  const authed = await checkCurrentUser();
+  
+  // Show login only on the main index page if not authenticated
+  if (!authed) {
+    const p = window.location.pathname;
+    if (p === '/' || p === '/index.html' || p.endsWith('/index.html')) {
+       openAuthDialog('login');
+    }
+  }
+
   bootstrapApp();
 })();
 
