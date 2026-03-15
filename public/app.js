@@ -363,7 +363,7 @@ function setAuthState(user, session) {
     if (seatZoneSelectEl) {
       loadSeatMap(selectedZoneId || seatZoneSelectEl.value, selectedTimeSlot);
     }
-    bootstrapAfterAuth();
+    bootstrapApp();
   } else {
     localStorage.removeItem('librarySessionId');
     authUserInfoEl.classList.add('auth-user-info--hidden');
@@ -937,7 +937,7 @@ async function renderWeeklyAnalytics() {
   }
 }
 
-function bootstrapAfterAuth() {
+function bootstrapApp() {
   if (appBootstrapped) return;
   appBootstrapped = true;
   populateTimeSlots();
@@ -951,9 +951,7 @@ function bootstrapAfterAuth() {
 }
 
 (async function init() {
-  const authed = await checkCurrentUser();
-  if (!authed) {
-    openAuthDialog('login');
-  }
+  await checkCurrentUser();
+  bootstrapApp();
 })();
 
